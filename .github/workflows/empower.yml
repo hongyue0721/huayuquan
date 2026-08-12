@@ -25,15 +25,15 @@ jobs:
             printf '%s\n' "$ISSUE_BODY" > /tmp/issue_body.txt
           fi
 
-      - name: 用仓库里的 translate.py 翻译
+      - name: 用仓库里的 翻译.py 翻译
         env:
           HYQ_API_KEY: ${{ secrets.HYQ_API_KEY }}
           HYQ_BASE_URL: ${{ secrets.HYQ_BASE_URL }}
           HYQ_MODEL: ${{ secrets.HYQ_MODEL }}
         run: |
           if [ -f /tmp/issue_body.txt ]; then
-            # stderr 单独捕获：translate.py 结束时打印 llm_calls=N（真实 LLM 调用次数）
-            python3 translate.py --file /tmp/issue_body.txt > /tmp/translated.txt 2> /tmp/translate_stderr.txt
+            # stderr 单独捕获：翻译.py 结束时打印 llm_calls=N（真实大语言模型调用次数）
+            python3 翻译.py --文件 /tmp/issue_body.txt > /tmp/translated.txt 2> /tmp/translate_stderr.txt
           else
             : > /tmp/translate_stderr.txt
           fi
@@ -61,15 +61,15 @@ jobs:
           fi
           python3 -c 'import json, os, sys; p="counters.json"; d=json.load(open(p, encoding="utf-8")) if os.path.exists(p) else {}; d["translations"]=d.get("translations", 0)+int(sys.argv[1]); open(p, "w", encoding="utf-8").write(json.dumps(d, ensure_ascii=False, indent=2)+"\n")' "$N"
 
-      - name: 重建网页词典 terms.js（合并 LLM 新译名）
+      - name: 重建网页词典 词库.js（合并大语言模型新译名）
         if: github.event_name == 'issues'
-        run: python3 build_web_dict.py
+        run: python3 构建网页词典.py
 
       - name: 提交并推送计数器、新词与词典
         if: github.event_name == 'issues'
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add counters.json cache.json terms.js terms/
+          git add counters.json cache.json 词库.js terms/
           git diff --cached --quiet || git commit -m "chore: 后台赋能（计数+新词+词典重建） [skip ci]"
           git push

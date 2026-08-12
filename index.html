@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>科技话语权赋能设备</title>
-<script src="terms.js"></script>
+<script src="词库.js"></script>
 <style>
   * { box-sizing: border-box; }
   body {
@@ -159,7 +159,7 @@
     transform: none;
   }
 
-  /* ---------- terms.js 缺失提示 ---------- */
+  /* ---------- 词库.js 缺失提示 ---------- */
   #missing-warning {
     text-align: center;
     font-size: 18px;
@@ -312,7 +312,7 @@
 </style>
 </head>
 <body>
-  <div id="missing-warning" hidden>请先运行 python3 build_web_dict.py</div>
+  <div id="missing-warning" hidden>请先运行 python3 构建网页词典.py</div>
 
   <header>
     <h1>科技话语权赋能设备</h1>
@@ -381,278 +381,278 @@
 
 <script src="//busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"
         onerror="document.getElementById('busuanzi_value_site_uv').textContent='统计中'"></script>
-<script>
 (function () {
   'use strict';
 
   // ---------- 词典 ----------
-  var TERMS = window.TERMS || {};
-  var dict = {}; // 会话词典：小写 key → 中文译名
-  var hasSeed = false;
-  for (var k in TERMS) {
-    if (Object.prototype.hasOwnProperty.call(TERMS, k)) {
-      dict[k.toLowerCase()] = TERMS[k];
-      hasSeed = true;
+  var 词库 = window.词库 || {};
+  var 会话词典 = {}; // 会话词典：小写 key → 中文译名
+  var 有种子 = false;
+  for (var k in 词库) {
+    if (Object.prototype.hasOwnProperty.call(词库, k)) {
+      会话词典[k.toLowerCase()] = 词库[k];
+      有种子 = true;
     }
   }
-  if (!hasSeed) {
+  if (!有种子) {
     document.getElementById('missing-warning').hidden = false;
   }
 
-  // ---------- 切分与最长匹配（与 DESIGN.md / translate.py 一致，勿改） ----------
-  var SEG_RE = /[A-Za-z0-9]+(?:[ \t.+#_-][A-Za-z0-9]+)*/g;
+  // ---------- 切分与最长匹配（与 设计.md / 翻译.py 一致，勿改） ----------
+  var 英文段正则 = /[A-Za-z0-9]+(?:[ \t.+#_-][A-Za-z0-9]+)*/g;
 
   // 词边界检查：key 首尾若为字母/数字，相邻字符不得再是字母/数字
   // （防止常见短词切碎专有名词，如 ai 不再切碎 chain、son 不再切碎 Sonnet）
-  function isAlnum(ch) { return /[A-Za-z0-9]/.test(ch); }
+  function 是字母数字(字符) { return /[A-Za-z0-9]/.test(字符); }
 
-  // 在段内位置 p 找最长的词典命中（前缀匹配，与 translate.py 一致）
-  function matchAt(seg, p, keys) {
-    var best = null;
-    for (var i = 0; i < keys.length; i++) {
-      var key = keys[i];
-      var len = key.length;
-      if (p + len > seg.length) continue;
-      if (seg.substr(p, len).toLowerCase() !== key) continue;
-      if (isAlnum(key[0]) && p > 0 && isAlnum(seg[p - 1])) continue;
-      if (isAlnum(key[len - 1]) && p + len < seg.length && isAlnum(seg[p + len])) continue;
-      if (!best || len > best.len) best = { key: key, len: len };
+  // 在段内位置找最长的词典命中（前缀匹配，与 翻译.py 一致）
+  function 段内最长命中(段, 位置, 键集) {
+    var 命中 = null;
+    for (var i = 0; i < 键集.length; i++) {
+      var 候选键 = 键集[i];
+      var 长度 = 候选键.length;
+      if (位置 + 长度 > 段.length) continue;
+      if (段.substr(位置, 长度).toLowerCase() !== 候选键) continue;
+      if (是字母数字(候选键[0]) && 位置 > 0 && 是字母数字(段[位置 - 1])) continue;
+      if (是字母数字(候选键[长度 - 1]) && 位置 + 长度 < 段.length && 是字母数字(段[位置 + 长度])) continue;
+      if (!命中 || 长度 > 命中.长) 命中 = { 键: 候选键, 长: 长度 };
     }
-    return best;
+    return 命中;
   }
 
-  // ---------- 阿拉伯数字本地转换（纯数字不进 LLM，直接译为语文数字，大小写双写） ----------
-  var NUM_DIGITS = ['零','一','二','三','四','五','六','七','八','九'];
-  var NUM_DIGITS_BIG = ['零','壹','贰','叁','肆','伍','陆','柒','捌','玖'];
-  var NUM_UNITS = ['', '十', '百', '千'];
-  var NUM_UNITS_BIG = ['', '拾', '佰', '仟'];
-  var NUM_SECTIONS = ['', '万', '亿', '万亿', '亿亿'];
+  // ---------- 阿拉伯数字本地转换（纯数字不进大语言模型，直接译为语文数字，大小写双写） ----------
+  var 小写数字集 = ['零','一','二','三','四','五','六','七','八','九'];
+  var 大写数字集 = ['零','壹','贰','叁','肆','伍','陆','柒','捌','玖'];
+  var 小写单位集 = ['', '十', '百', '千'];
+  var 大写单位集 = ['', '拾', '佰', '仟'];
+  var 数位分节 = ['', '万', '亿', '万亿', '亿亿'];
 
   // 读一段（最多四位）：返回该段的小写/大写读法，段内零按规则补「零」
-  function readNumSection(sec, big) {
-    var digs = big ? NUM_DIGITS_BIG : NUM_DIGITS;
-    var units = big ? NUM_UNITS_BIG : NUM_UNITS;
-    var out = '';
-    var zero = false;
-    for (var i = 0; i < sec.length; i++) {
-      var d = sec.charCodeAt(i) - 48;
-      var pos = sec.length - 1 - i;
+  function 读分节(段, 大写) {
+    var 数位 = 大写 ? 大写数字集 : 小写数字集;
+    var 单位 = 大写 ? 大写单位集 : 小写单位集;
+    var 输出 = '';
+    var 零 = false;
+    for (var i = 0; i < 段.length; i++) {
+      var d = 段.charCodeAt(i) - 48;
+      var 位序 = 段.length - 1 - i;
       if (d === 0) {
-        zero = true;
+        零 = true;
       } else {
-        if (zero && out) out += digs[0];
-        out += digs[d] + units[pos];
-        zero = false;
+        if (零 && 输出) 输出 += 数位[0];
+        输出 += 数位[d] + 单位[位序];
+        零 = false;
       }
     }
-    return out;
+    return 输出;
   }
 
   // 整数读法：按 4 位一节，节间补「零」；小写按约定省略最高位「一十」的「一」
-  function intToZh(numStr, big) {
-    var digits = numStr.replace(/^0+/, '') || '0';
-    if (digits === '0') return '零';
-    var sections = [];
-    for (var i = digits.length; i > 0; i -= 4) {
-      var start = (i - 4 < 0) ? 0 : i - 4;
-      sections.push(digits.slice(start, i));
+  function 整数读法(数字串, 大写) {
+    var 数位 = 数字串.replace(/^0+/, '') || '0';
+    if (数位 === '0') return '零';
+    var 分节 = [];
+    for (var i = 数位.length; i > 0; i -= 4) {
+      var 起点 = (i - 4 < 0) ? 0 : i - 4;
+      分节.push(数位.slice(起点, i));
     }
-    var out = '';
-    for (var s = sections.length - 1; s >= 0; s--) {
-      var sec = readNumSection(sections[s], big);
-      if (sec) {
-        if (s < sections.length - 1 && out && parseInt(sections[s], 10) < 1000) out += '零';
-        out += sec + (s > 0 ? NUM_SECTIONS[s] : '');
+    var 输出 = '';
+    for (var s = 分节.length - 1; s >= 0; s--) {
+      var 段 = 读分节(分节[s], 大写);
+      if (段) {
+        if (s < 分节.length - 1 && 输出 && parseInt(分节[s], 10) < 1000) 输出 += '零';
+        输出 += 段 + (s > 0 ? 数位分节[s] : '');
       }
     }
-    if (!big && out.indexOf('一十') === 0 && digits.charAt(0) === '1' && digits.length % 4 === 2) {
-      out = out.slice(1);
+    if (!大写 && 输出.indexOf('一十') === 0 && 数字串.charAt(0) === '1' && 数字串.length % 4 === 2) {
+      输出 = 输出.slice(1);
     }
-    return out;
+    return 输出;
   }
 
   // 纯数字（^\d+(\.\d+)?$）→ 语文数字（小写（大写）），如 2000 → 二千（贰仟）、3.14 → 三点一四（叁点壹肆）
-  function numZh(s) {
-    if (!/^\d+(\.\d+)?$/.test(s)) return null;
-    var p = s.split('.');
-    var small = intToZh(p[0], false);
-    var big = intToZh(p[0], true);
-    if (p.length > 1) {
-      var fs = '', fb = '';
-      for (var i = 0; i < p[1].length; i++) {
-        var d = p[1].charCodeAt(i) - 48;
-        fs += NUM_DIGITS[d];
-        fb += NUM_DIGITS_BIG[d];
+  function 数字转语文(串) {
+    if (!/^\d+(\.\d+)?$/.test(串)) return null;
+    var 分片 = 串.split('.');
+    var 小写 = 整数读法(分片[0], false);
+    var 大写 = 整数读法(分片[0], true);
+    if (分片.length > 1) {
+      var 小写尾 = '', 大写尾 = '';
+      for (var i = 0; i < 分片[1].length; i++) {
+        var d = 分片[1].charCodeAt(i) - 48;
+        小写尾 += 小写数字集[d];
+        大写尾 += 大写数字集[d];
       }
-      small += '点' + fs;
-      big += '点' + fb;
+      小写 += '点' + 小写尾;
+      大写 += '点' + 大写尾;
     }
-    return small + '（' + big + '）';
+    return 小写 + '（' + 大写 + '）';
   }
 
   // 整段未命中时：段内从左到右最长匹配切分（词典合查）
-  // 返回 { matched: [{start,end,key}], numRuns: [{start,end,text}], unknownRuns: [{start,end,term}] }
-  function segmentPlan(seg) {
-    var keys = Object.keys(dict);
-    var matched = [];
-    var p = 0, n = seg.length;
-    while (p < n) {
-      var m = matchAt(seg, p, keys);
-      if (m) { matched.push({ start: p, end: p + m.len, key: m.key }); p += m.len; }
-      else p++;
+  // 返回 { 命中片段: [{起点,终点,键}], 数字片段: [{起点,终点,文本}], 未知片段: [{起点,终点,术语}] }
+  function 段落规划(段) {
+    var 键集 = Object.keys(会话词典);
+    var 命中片段 = [];
+    var 位置 = 0, 长度 = 段.length;
+    while (位置 < 长度) {
+      var 命中 = 段内最长命中(段, 位置, 键集);
+      if (命中) { 命中片段.push({ 起点: 位置, 终点: 位置 + 命中.长, 键: 命中.键 }); 位置 += 命中.长; }
+      else 位置++;
     }
     // 匹配之间的空隙：先整段查词典（如已缓存的残余词条），再收为未知词。
     // 残余原样保留（含边缘空白）。
-    var numRuns = [];
-    var unknownRuns = [];
-    var pos = 0, idx = 0;
-    while (pos < n) {
-      var next = idx < matched.length ? matched[idx].start : n;
-      if (pos < next) {
-        var term = seg.slice(pos, next);
-        var low = term.trim().toLowerCase();
-        if (low && dict[low] !== undefined) matched.push({ start: pos, end: next, key: low });
-        else if (low) {
-          // 空白切成单词级未知碎片：纯数字（^\d+(\.\d+)?$）本地转语文数字，不进 unknowns；
+    var 数字片段 = [];
+    var 未知片段 = [];
+    var 空位 = 0, 序号 = 0;
+    while (空位 < 长度) {
+      var 下一处 = 序号 < 命中片段.length ? 命中片段[序号].起点 : 长度;
+      if (空位 < 下一处) {
+        var 术语 = 段.slice(空位, 下一处);
+        var 小写 = 术语.trim().toLowerCase();
+        if (小写 && 会话词典[小写] !== undefined) 命中片段.push({ 起点: 空位, 终点: 下一处, 键: 小写 });
+        else if (小写) {
+          // 空白切成单词级未知碎片：纯数字（^\d+(\.\d+)?$）本地转语文数字，不进未知片段；
           // 其余逐个赋能，反哺词典的是干净单词而非一次性短语
-          var wre = /\S+/g, wm;
-          while ((wm = wre.exec(term)) !== null) {
-            var w = wm[0];
-            var numT = numZh(w);
-            if (numT) {
-              numRuns.push({ start: pos + wm.index, end: pos + wm.index + w.length, text: numT });
+          var 词正则 = /\S+/g, 词匹配;
+          while ((词匹配 = 词正则.exec(术语)) !== null) {
+            var 词 = 词匹配[0];
+            var 数字译名 = 数字转语文(词);
+            if (数字译名) {
+              数字片段.push({ 起点: 空位 + 词匹配.index, 终点: 空位 + 词匹配.index + 词.length, 文本: 数字译名 });
             } else {
-              unknownRuns.push({ start: pos + wm.index, end: pos + wm.index + w.length, term: w });
+              未知片段.push({ 起点: 空位 + 词匹配.index, 终点: 空位 + 词匹配.index + 词.length, 术语: 词 });
             }
           }
         }
       }
-      if (idx < matched.length) { pos = matched[idx].end; idx++; }
-      else pos = n;
+      if (序号 < 命中片段.length) { 空位 = 命中片段[序号].终点; 序号++; }
+      else 空位 = 长度;
     }
-    return { matched: matched, numRuns: numRuns, unknownRuns: unknownRuns };
+    return { 命中片段: 命中片段, 数字片段: 数字片段, 未知片段: 未知片段 };
   }
 
-  // 整段切分：返回 { pieces: [{start,end,text}], unknowns: [{start,end,term}] }
-  function buildPlan(text) {
-    SEG_RE.lastIndex = 0;
-    var pieces = [], unknowns = [];
+  // 整段切分：返回 { 片段表: [{起点,终点,文本}], 未知列表: [{起点,终点,术语}] }
+  function 规划全文(文本) {
+    英文段正则.lastIndex = 0;
+    var 片段表 = [], 未知列表 = [];
     var m;
-    while ((m = SEG_RE.exec(text)) !== null) {
-      var s = m.index, e = s + m[0].length;
-      var seg = m[0];
-      var key = seg.toLowerCase();
-      if (dict[key] !== undefined) {
-        pieces.push({ start: s, end: e, text: dict[key] });
+    while ((m = 英文段正则.exec(文本)) !== null) {
+      var 起点 = m.index, 终点 = 起点 + m[0].length;
+      var 段 = m[0];
+      var 键 = 段.toLowerCase();
+      if (会话词典[键] !== undefined) {
+        片段表.push({ 起点: 起点, 终点: 终点, 文本: 会话词典[键] });
         continue;
       }
-      var plan = segmentPlan(seg);
-      for (var i = 0; i < plan.matched.length; i++) {
-        var mt = plan.matched[i];
-        pieces.push({ start: s + mt.start, end: s + mt.end, text: dict[mt.key] });
+      var 规划 = 段落规划(段);
+      for (var i = 0; i < 规划.命中片段.length; i++) {
+        var 命中片段 = 规划.命中片段[i];
+        片段表.push({ 起点: 起点 + 命中片段.起点, 终点: 起点 + 命中片段.终点, 文本: 会话词典[命中片段.键] });
       }
       // 纯数字碎片：本地已转语文数字，直接并入译名片段
-      for (var k = 0; k < plan.numRuns.length; k++) {
-        var nr = plan.numRuns[k];
-        pieces.push({ start: s + nr.start, end: s + nr.end, text: nr.text });
+      for (var k = 0; k < 规划.数字片段.length; k++) {
+        var 数字片段 = 规划.数字片段[k];
+        片段表.push({ 起点: 起点 + 数字片段.起点, 终点: 起点 + 数字片段.终点, 文本: 数字片段.文本 });
       }
-      for (var j = 0; j < plan.unknownRuns.length; j++) {
-        var u = plan.unknownRuns[j];
-        unknowns.push({ start: s + u.start, end: s + u.end, term: u.term });
+      for (var j = 0; j < 规划.未知片段.length; j++) {
+        var 未知片段 = 规划.未知片段[j];
+        未知列表.push({ 起点: 起点 + 未知片段.起点, 终点: 起点 + 未知片段.终点, 术语: 未知片段.术语 });
       }
     }
-    return { pieces: pieces, unknowns: unknowns };
+    return { 片段表: 片段表, 未知列表: 未知列表 };
   }
 
   // 原位回填：译名替换对应区间，不加任何空格，其余字符原封不动
-  function renderOutput(text, plan, llmMap) {
-    llmMap = llmMap || {};
-    var items = plan.pieces.slice();
-    for (var i = 0; i < plan.unknowns.length; i++) {
-      var u = plan.unknowns[i];
-      items.push({ start: u.start, end: u.end, unknown: u.term });
+  function 渲染输出(文本, 规划, 补译映射) {
+    补译映射 = 补译映射 || {};
+    var 片段表 = 规划.片段表.slice();
+    for (var i = 0; i < 规划.未知列表.length; i++) {
+      var 未知 = 规划.未知列表[i];
+      片段表.push({ 起点: 未知.起点, 终点: 未知.终点, 未知原文: 未知.术语 });
     }
-    items.sort(function (a, b) { return a.start - b.start; });
-    var out = '';
-    var pos = 0;
-    for (var j = 0; j < items.length; j++) {
-      var it = items[j];
-      if (it.start > pos) out += text.slice(pos, it.start);
-      if (it.unknown !== undefined) {
-        var low = it.unknown.trim().toLowerCase();
-        out += (llmMap[low] !== undefined) ? llmMap[low] : it.unknown;
+    片段表.sort(function (a, b) { return a.起点 - b.起点; });
+    var 输出 = '';
+    var 位置 = 0;
+    for (var j = 0; j < 片段表.length; j++) {
+      var 片段 = 片段表[j];
+      if (片段.起点 > 位置) 输出 += 文本.slice(位置, 片段.起点);
+      if (片段.未知原文 !== undefined) {
+        var 小写 = 片段.未知原文.trim().toLowerCase();
+        输出 += (补译映射[小写] !== undefined) ? 补译映射[小写] : 片段.未知原文;
       } else {
-        out += it.text;
+        输出 += 片段.文本;
       }
-      pos = it.end;
+      位置 = 片段.终点;
     }
-    out += text.slice(pos);
-    return out;
+    输出 += 文本.slice(位置);
+    return 输出;
   }
 
-  function pendingTerms(plan) {
-    var seen = {}, out = [];
-    for (var i = 0; i < plan.unknowns.length; i++) {
-      var t = plan.unknowns[i].term.trim();
-      if (!t) continue;
-      var low = t.toLowerCase();
-      if (seen[low]) continue;
-      seen[low] = true;
-      out.push(t);
+  // 收集待补译术语：去重、跳过空串，返回数组
+  function 待补译术语(规划) {
+    var 已见 = {}, 输出 = [];
+    for (var i = 0; i < 规划.未知列表.length; i++) {
+      var 术语 = 规划.未知列表[i].术语.trim();
+      if (!术语) continue;
+      var 小写 = 术语.toLowerCase();
+      if (已见[小写]) continue;
+      已见[小写] = true;
+      输出.push(术语);
     }
-    return out;
+    return 输出;
   }
 
   // ---------- 翻译：仅点击按钮触发 ----------
-  var inputEl = document.getElementById('input');
-  var outputEl = document.getElementById('output');
-  var hintEl = document.getElementById('hint');
-  var hintLink = document.getElementById('hint-link');
+  var 输入框 = document.getElementById('input');
+  var 输出框 = document.getElementById('output');
+  var 提示条 = document.getElementById('hint');
+  var 提示链接 = document.getElementById('hint-link');
 
   // 提交翻译请求的 GitHub 链接（部署仓库：hongyue0721/huayuquan）
-  var ISSUE_BASE = 'https://github.com/hongyue0721/huayuquan/issues/new?title=翻译请求&body=';
+  var 建议地址 = 'https://github.com/hongyue0721/huayuquan/issues/new?title=翻译请求&body=';
 
   // 翻译结果更新时重放淡入动效（移除类→强制重排→加回类）
-  function flashOutput() {
-    outputEl.classList.remove('flash');
-    void outputEl.offsetWidth;
-    outputEl.classList.add('flash');
+  function 闪动输出() {
+    输出框.classList.remove('flash');
+    void 输出框.offsetWidth;
+    输出框.classList.add('flash');
   }
 
   // ---------- 输出区点击复制 ----------
   // 老式兜底：textarea + execCommand('copy')，兼容非 https 环境
-  function legacyCopy(text) {
-    var ta = document.createElement('textarea');
-    ta.value = text;
-    ta.style.position = 'fixed';
-    ta.style.opacity = '0';
-    document.body.appendChild(ta);
-    ta.select();
+  function 旧式复制(文本) {
+    var 输入区 = document.createElement('textarea');
+    输入区.value = 文本;
+    输入区.style.position = 'fixed';
+    输入区.style.opacity = '0';
+    document.body.appendChild(输入区);
+    输入区.select();
     try { document.execCommand('copy'); } catch (e) { /* 忽略 */ }
-    document.body.removeChild(ta);
+    document.body.removeChild(输入区);
   }
 
-  var outputLabelEl = document.getElementById('output-label');
-  var OUTPUT_LABEL_TITLE = outputLabelEl.textContent; // 面板标题原文（复制后临时改字再改回）
-  var copyTimer = null;
+  var 输出标题框 = document.getElementById('output-label');
+  var 输出标题原文 = 输出标题框.textContent; // 面板标题原文（复制后临时改字再改回）
+  var 复制定时器 = null;
 
   // 点击 #output 复制其文本；成功后面板标题临时改为「已复制到剪贴板」1.5 秒
-  outputEl.addEventListener('click', function () {
-    var text = outputEl.textContent;
-    if (!text) return;
-    var done = function () {
-      outputLabelEl.textContent = '已复制到剪贴板';
-      if (copyTimer) clearTimeout(copyTimer);
-      copyTimer = setTimeout(function () { outputLabelEl.textContent = OUTPUT_LABEL_TITLE; }, 1500);
+  输出框.addEventListener('click', function () {
+    var 文本 = 输出框.textContent;
+    if (!文本) return;
+    var 完成 = function () {
+      输出标题框.textContent = '已复制到剪贴板';
+      if (复制定时器) clearTimeout(复制定时器);
+      复制定时器 = setTimeout(function () { 输出标题框.textContent = 输出标题原文; }, 1500);
     };
     if (navigator.clipboard && navigator.clipboard.writeText) {
-      navigator.clipboard.writeText(text).then(done).catch(function () {
-        legacyCopy(text);
-        done();
+      navigator.clipboard.writeText(文本).then(完成).catch(function () {
+        旧式复制(文本);
+        完成();
       });
     } else {
-      legacyCopy(text);
-      done();
+      旧式复制(文本);
+      完成();
     }
   });
 
@@ -660,43 +660,43 @@
   // 词元钥匙与节点地址（站长特供）。
   // 我知道你想翻这里找 key——明说吧：这个 key 是不限量的弱智模型，随便用，别客气。
   // 源码里只做了点混淆防爬虫：乱序拼接 → atob → 反转，即为真值。
-  var _OBF = {
-    key: ['ZPS2hrVmU3b3JxNU5', 'cm9MZEYydEJMczB6Q', 'yMmxOaUZPNHlzLWtz', '2l6NFdqNE9XdGtZUX'],
-    base: ['Ljc0Ly86', 'MXYvMzIx', 'cHR0aA==', 'LjYuNDAx']
+  var _混淆 = {
+    钥匙: ['ZPS2hrVmU3b3JxNU5', 'cm9MZEYydEJMczB6Q', 'yMmxOaUZPNHlzLWtz', '2l6NFdqNE9XdGtZUX'],
+    地址: ['Ljc0Ly86', 'MXYvMzIx', 'cHR0aA==', 'LjYuNDAx']
   };
-  function _deobf(p) {
-    var s = p[1] + p[3] + p[0] + p[2];
+  function _去混淆(分片) {
+    var s = 分片[1] + 分片[3] + 分片[0] + 分片[2];
     return atob(s).split('').reverse().join('');
   }
 
-  var BYOK_LS = 'hyq-byok';
-  var keyEl = document.getElementById('byok-key');
-  var baseEl = document.getElementById('byok-base');
-  var modelEl = document.getElementById('byok-model');
-  var byokStatus = document.getElementById('byok-status');
+  var 自带钥匙存储键 = 'hyq-byok';
+  var 钥匙框 = document.getElementById('byok-key');
+  var 地址框 = document.getElementById('byok-base');
+  var 模型框 = document.getElementById('byok-model');
+  var 自带钥匙状态 = document.getElementById('byok-status');
 
   // 页面加载即用站长预置值填好（localStorage 有用户自改值则以用户为准）
-  keyEl.value = _deobf(_OBF.key);
-  baseEl.value = _deobf(_OBF.base);
+  钥匙框.value = _去混淆(_混淆.钥匙);
+  地址框.value = _去混淆(_混淆.地址);
 
   try {
-    var saved = JSON.parse(localStorage.getItem(BYOK_LS) || '{}');
-    if (saved.key) keyEl.value = saved.key;
-    if (saved.base) baseEl.value = saved.base;
-    if (saved.model) modelEl.value = saved.model;
+    var 已存设置 = JSON.parse(localStorage.getItem(自带钥匙存储键) || '{}');
+    if (已存设置.key) 钥匙框.value = 已存设置.key;
+    if (已存设置.base) 地址框.value = 已存设置.base;
+    if (已存设置.model) 模型框.value = 已存设置.model;
   } catch (e) { /* 忽略 */ }
-  [keyEl, baseEl, modelEl].forEach(function (el) {
-    el.addEventListener('change', function () {
+  [钥匙框, 地址框, 模型框].forEach(function (框) {
+    框.addEventListener('change', function () {
       try {
-        localStorage.setItem(BYOK_LS, JSON.stringify({
-          key: keyEl.value.trim(), base: baseEl.value.trim(), model: modelEl.value.trim()
+        localStorage.setItem(自带钥匙存储键, JSON.stringify({
+          key: 钥匙框.value.trim(), base: 地址框.value.trim(), model: 模型框.value.trim()
         }));
       } catch (e) { /* 忽略 */ }
     });
   });
 
-  // 与 llm.py 完全一致的翻译风格规则（数字双写、版本号片段、防乱码）
-  var HYQ_SYSTEM_PROMPT = [
+  // 与大语言模型.py 完全一致的翻译风格规则（数字双写、版本号片段、防乱码）
+  var 话语权系统提示 = [
     '你是"话语权翻译机"的翻译引擎，把英文术语翻译成"官方定名 / 直译腔"中文。规则：',
     '1. 有官方定名的优先用定名：token→词元、agent→智能体、prompt→提示词；',
     '2. 缩写先展开全称再逐字硬翻：API→应用程序编程接口、ChatGPT→聊天生成式预训练转换器、LLM→大语言模型；',
@@ -719,7 +719,7 @@
   ].join('\n');
 
   // 从响应文本中提取第一个 JSON 对象
-  function parseJSONObject(s) {
+  function 提取对象(s) {
     if (typeof s !== 'string') return {};
     var i = s.indexOf('{');
     var j = s.lastIndexOf('}');
@@ -728,190 +728,190 @@
   }
 
   // 译名校验：必须含汉字，且不得残留英文字母/阿拉伯数字（防乱码）
-  function isCleanTranslation(v) {
-    return /[\u4e00-\u9fff]/.test(v) && !/[A-Za-z0-9]/.test(v);
+  function 是否洁净译名(值) {
+    return /[\u4e00-\u9fff]/.test(值) && !/[A-Za-z0-9]/.test(值);
   }
 
   // 批量翻译：每 5 个一小批串行调用（长批量易跑偏），失败重试一次
-  function llmTranslate(terms) {
-    var base = baseEl.value.trim().replace(/\/+$/, '');
-    var key = keyEl.value.trim();
-    var model = modelEl.value.trim() || 'astron-code-latest';
-    var result = {};
-    function callOnce(chunk) {
-      bumpLocalCalls(); // 每实际发起一批 HTTP 请求（含失败重试）计一次本机实时赋能调用，并立即刷新计数显示
-      return fetch(base + '/chat/completions', {
+  function 补译术语(术语列表) {
+    var 请求地址 = 地址框.value.trim().replace(/\/+$/, '');
+    var 秘钥 = 钥匙框.value.trim();
+    var 模型 = 模型框.value.trim() || 'astron-code-latest';
+    var 结果 = {};
+    function 调用一次(小批) {
+      累加本机调用(); // 每实际发起一批 HTTP 请求（含失败重试）计一次本机实时赋能调用，并立即刷新计数显示
+      return fetch(请求地址 + '/chat/completions', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + key },
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + 秘钥 },
         body: JSON.stringify({
-          model: model, temperature: 0,
+          model: 模型, temperature: 0,
           messages: [
-            { role: 'system', content: HYQ_SYSTEM_PROMPT },
-            { role: 'user', content: '请翻译以下英文术语：\n' + JSON.stringify(chunk) + '\n返回严格 JSON 对象（键为原文、值为译名）。' }
+            { role: 'system', content: 话语权系统提示 },
+            { role: 'user', content: '请翻译以下英文术语：\n' + JSON.stringify(小批) + '\n返回严格 JSON 对象（键为原文、值为译名）。' }
           ]
         })
-      }).then(function (res) {
-        if (!res.ok) throw new Error('HTTP ' + res.status);
-        return res.json();
-      }).then(function (body) {
-        var obj = parseJSONObject(body.choices[0].message.content);
-        for (var k in obj) {
-          if (Object.prototype.hasOwnProperty.call(obj, k)) {
-            var kk = k.trim().toLowerCase();
-            var v = String(obj[k]).trim();
-            if (kk && isCleanTranslation(v)) result[kk] = v;
+      }).then(function (响应) {
+        if (!响应.ok) throw new Error('HTTP ' + 响应.status);
+        return 响应.json();
+      }).then(function (响应体) {
+        var 对象 = 提取对象(响应体.choices[0].message.content);
+        for (var k in 对象) {
+          if (Object.prototype.hasOwnProperty.call(对象, k)) {
+            var 小写键 = k.trim().toLowerCase();
+            var 值 = String(对象[k]).trim();
+            if (小写键 && 是否洁净译名(值)) 结果[小写键] = 值;
           }
         }
       });
     }
-    var chain = Promise.resolve();
-    for (var i = 0; i < terms.length; i += 5) {
-      (function (chunk) {
-        chain = chain.then(function () {
-          return callOnce(chunk)
-            .catch(function () { return callOnce(chunk); })
+    var 链 = Promise.resolve();
+    for (var i = 0; i < 术语列表.length; i += 5) {
+      (function (小批) {
+        链 = 链.then(function () {
+          return 调用一次(小批)
+            .catch(function () { return 调用一次(小批); })
             .catch(function () { /* 该批放弃，保留原词 */ });
         });
-      })(terms.slice(i, i + 5));
+      })(术语列表.slice(i, i + 5));
     }
-    return chain.then(function () { return result; });
+    return 链.then(function () { return 结果; });
   }
 
   document.getElementById('btn-translate').addEventListener('click', function () {
     // 新一轮翻译：丢弃上一轮未评价的实时赋能结果，评价区重置为可投并隐藏（翻译成功后重新展示）
-    pendingLlmMap = null;
-    resetVoteArea();
-    voteAreaEl.hidden = true;
-    var text = inputEl.value;
-    if (!text.trim()) {
-      outputEl.textContent = '请先输入尚未掌握的话语权';
-      hintEl.hidden = true;
-      flashOutput();
+    待评补译结果 = null;
+    重置评价区();
+    评价区.hidden = true;
+    var 文本 = 输入框.value;
+    if (!文本.trim()) {
+      输出框.textContent = '请先输入尚未掌握的话语权';
+      提示条.hidden = true;
+      闪动输出();
       return;
     }
     // 先本地词典离线翻译并立即显示
-    var plan = buildPlan(text);
-    if (!plan.pieces.length && !plan.unknowns.length) {
+    var 规划 = 规划全文(文本);
+    if (!规划.片段表.length && !规划.未知列表.length) {
       // 通篇无英文段（纯中文输入）：无需赋能，直接反馈，不展示评价区
-      outputEl.textContent = '通篇皆为规范中文，话语权已牢牢掌握，无需双向赋能。';
-      hintEl.hidden = true;
-      byokStatus.hidden = true;
-      voteAreaEl.hidden = true;
-      flashOutput();
+      输出框.textContent = '通篇皆为规范中文，话语权已牢牢掌握，无需双向赋能。';
+      提示条.hidden = true;
+      自带钥匙状态.hidden = true;
+      评价区.hidden = true;
+      闪动输出();
       return;
     }
-    outputEl.textContent = renderOutput(text, plan, {});
-    flashOutput();
-    var pending = pendingTerms(plan);
-    if (!pending.length) {
-      hintEl.hidden = true;
-      resetVoteArea();
-      voteAreaEl.hidden = false; // 纯词典命中同样可评价，只是无缓存操作
+    输出框.textContent = 渲染输出(文本, 规划, {});
+    闪动输出();
+    var 待补译 = 待补译术语(规划);
+    if (!待补译.length) {
+      提示条.hidden = true;
+      重置评价区();
+      评价区.hidden = false; // 纯词典命中同样可评价，只是无缓存操作
       return;
     }
-    if (!keyEl.value.trim()) {
+    if (!钥匙框.value.trim()) {
       // 未备钥匙：走后台异步渠道（issue → GitHub Action）
-      hintLink.href = ISSUE_BASE + encodeURIComponent(text);
-      hintEl.hidden = false;
+      提示链接.href = 建议地址 + encodeURIComponent(文本);
+      提示条.hidden = false;
       return;
     }
     // 已备钥匙：实时赋能
-    var btn = this;
-    var oldText = btn.textContent;
-    btn.disabled = true;
-    btn.textContent = '实时赋能中…';
-    byokStatus.hidden = true;
-    llmTranslate(pending).then(function (llmMap) {
-      pendingLlmMap = llmMap; // 先存待评：仅用于本次回显，待用户 👍 后才并入会话词典
-      outputEl.textContent = renderOutput(text, plan, llmMap);
-      flashOutput();
-      var still = pending.filter(function (t) { return llmMap[t.trim().toLowerCase()] === undefined; });
-      if (still.length) {
-        hintLink.href = ISSUE_BASE + encodeURIComponent(text);
-        hintEl.hidden = false;
+    var 按钮 = this;
+    var 原按钮文字 = 按钮.textContent;
+    按钮.disabled = true;
+    按钮.textContent = '实时赋能中…';
+    自带钥匙状态.hidden = true;
+    补译术语(待补译).then(function (补译映射) {
+      待评补译结果 = 补译映射; // 先存待评：仅用于本次回显，待用户 👍 后才并入会话词典
+      输出框.textContent = 渲染输出(文本, 规划, 补译映射);
+      闪动输出();
+      var 仍未补译 = 待补译.filter(function (术语) { return 补译映射[术语.trim().toLowerCase()] === undefined; });
+      if (仍未补译.length) {
+        提示链接.href = 建议地址 + encodeURIComponent(文本);
+        提示条.hidden = false;
       } else {
-        hintEl.hidden = true;
+        提示条.hidden = true;
       }
-      byokStatus.textContent = '实时赋能完成';
-      byokStatus.hidden = false;
-      resetVoteArea();
-      voteAreaEl.hidden = false; // 翻译成功：展示译后评价区
-    }).catch(function (err) {
-      byokStatus.textContent = '实时赋能失败：' + err.message + '，可改用后台赋能';
-      byokStatus.hidden = false;
-      hintLink.href = ISSUE_BASE + encodeURIComponent(text);
-      hintEl.hidden = false;
+      自带钥匙状态.textContent = '实时赋能完成';
+      自带钥匙状态.hidden = false;
+      重置评价区();
+      评价区.hidden = false; // 翻译成功：展示译后评价区
+    }).catch(function (错误) {
+      自带钥匙状态.textContent = '实时赋能失败：' + 错误.message + '，可改用后台赋能';
+      自带钥匙状态.hidden = false;
+      提示链接.href = 建议地址 + encodeURIComponent(文本);
+      提示条.hidden = false;
     }).then(function () {
-      btn.disabled = false;
-      btn.textContent = oldText;
+      按钮.disabled = false;
+      按钮.textContent = 原按钮文字;
     });
   });
 
   // ---------- 译后评价（👍/👎，一译一票，不跨次累加） ----------
-  var pendingLlmMap = null; // 实时赋能结果：待用户评价后决定是否并入会话词典（不评价则丢弃）
-  var voted = false;        // 同一次翻译内是否已投票（只能投一票）
-  var voteAreaEl = document.getElementById('vote-area');
-  var votePromptEl = document.getElementById('vote-prompt');
-  var voteUpBtn = document.getElementById('vote-up');
-  var voteDownBtn = document.getElementById('vote-down');
+  var 待评补译结果 = null; // 实时赋能结果：待用户评价后决定是否并入会话词典（不评价则丢弃）
+  var 已投票 = false;        // 同一次翻译内是否已投票（只能投一票）
+  var 评价区 = document.getElementById('vote-area');
+  var 评价提示 = document.getElementById('vote-prompt');
+  var 赞同按钮 = document.getElementById('vote-up');
+  var 不赞同按钮 = document.getElementById('vote-down');
 
   // 重置为可投状态（每次翻译完成、以及页面初始化时调用）
-  function resetVoteArea() {
-    voted = false;
-    votePromptEl.textContent = '对此次赋能的结果评价如何？';
-    voteUpBtn.disabled = false;
-    voteDownBtn.disabled = false;
-    voteUpBtn.textContent = '👍 赞同';
-    voteDownBtn.textContent = '👎 不赞同';
+  function 重置评价区() {
+    已投票 = false;
+    评价提示.textContent = '对此次赋能的结果评价如何？';
+    赞同按钮.disabled = false;
+    不赞同按钮.disabled = false;
+    赞同按钮.textContent = '👍 赞同';
+    不赞同按钮.textContent = '👎 不赞同';
   }
 
   // 👍：并入会话词典（真正命中缓存）；👎：丢弃本次新词，不写入缓存
-  function submitVote(up) {
-    if (voted) return; // 同一次翻译内只能投一票
-    voted = true;
-    voteUpBtn.disabled = true;
-    voteDownBtn.disabled = true;
-    if (up) {
-      votePromptEl.textContent = '已收到您的评价';
-      if (pendingLlmMap) {
-        for (var k in pendingLlmMap) {
-          if (Object.prototype.hasOwnProperty.call(pendingLlmMap, k)) dict[k] = pendingLlmMap[k];
+  function 提交评价(是否赞同) {
+    if (已投票) return; // 同一次翻译内只能投一票
+    已投票 = true;
+    赞同按钮.disabled = true;
+    不赞同按钮.disabled = true;
+    if (是否赞同) {
+      评价提示.textContent = '已收到您的评价';
+      if (待评补译结果) {
+        for (var k in 待评补译结果) {
+          if (Object.prototype.hasOwnProperty.call(待评补译结果, k)) 会话词典[k] = 待评补译结果[k];
         }
-        pendingLlmMap = null;
+        待评补译结果 = null;
       }
-      byokStatus.textContent = '感谢你为文化赋能做出的贡献';
-      byokStatus.hidden = false;
+      自带钥匙状态.textContent = '感谢你为文化赋能做出的贡献';
+      自带钥匙状态.hidden = false;
     } else {
-      votePromptEl.textContent = '已收到您的评价';
-      pendingLlmMap = null; // 丢弃本次新词，不写入缓存
-      byokStatus.textContent = '您的指责是我们通往文化自信的动力';
-      byokStatus.hidden = false;
+      评价提示.textContent = '已收到您的评价';
+      待评补译结果 = null; // 丢弃本次新词，不写入缓存
+      自带钥匙状态.textContent = '您的指责是我们通往文化自信的动力';
+      自带钥匙状态.hidden = false;
     }
   }
 
-  voteUpBtn.addEventListener('click', function () { submitVote(true); });
-  voteDownBtn.addEventListener('click', function () { submitVote(false); });
-  resetVoteArea(); // 初始化：按钮文案固定为「👍 赞同」「👎 不赞同」
+  赞同按钮.addEventListener('click', function () { 提交评价(true); });
+  不赞同按钮.addEventListener('click', function () { 提交评价(false); });
+  重置评价区(); // 初始化：按钮文案固定为「👍 赞同」「👎 不赞同」
 
   // ---------- 计数器（动态更新） ----------
   // 已掌握话语权人数：busuanzi 站点 UV，每 60 秒重拉一次保持新鲜；加载失败显示「统计中」
-  var uvEl = document.getElementById('busuanzi_value_site_uv');
-  var uvLast = '';
+  var 访客数框 = document.getElementById('busuanzi_value_site_uv');
+  var 上次访客数 = '';
   // 数值变化时重放弹跳动效
   new MutationObserver(function () {
-    var t = uvEl.textContent.trim();
-    if (/^[\d,]+$/.test(t) && t !== uvLast) {
-      uvLast = t;
-      uvEl.classList.remove('updated');
-      void uvEl.offsetWidth;
-      uvEl.classList.add('updated');
+    var t = 访客数框.textContent.trim();
+    if (/^[\d,]+$/.test(t) && t !== 上次访客数) {
+      上次访客数 = t;
+      访客数框.classList.remove('updated');
+      void 访客数框.offsetWidth;
+      访客数框.classList.add('updated');
     }
-  }).observe(uvEl, { childList: true, characterData: true, subtree: true });
-  var uvStart = Date.now();
-  (function pollUV() {
-    if (uvEl.textContent.trim() !== '') return;       // 已取到数值
-    if (Date.now() - uvStart > 10000) { uvEl.textContent = '统计中'; return; }
-    setTimeout(pollUV, 500);
+  }).observe(访客数框, { childList: true, characterData: true, subtree: true });
+  var 访客数起始 = Date.now();
+  (function 轮询访客数() {
+    if (访客数框.textContent.trim() !== '') return;       // 已取到数值
+    if (Date.now() - 访客数起始 > 10000) { 访客数框.textContent = '统计中'; return; }
+    setTimeout(轮询访客数, 500);
   })();
   setInterval(function () {                            // 每 60 秒重新拉取
     var s = document.createElement('script');
@@ -922,59 +922,59 @@
 
   // 技术突破与文化自信双向赋能次数（合计口径）：
   //   远端 = GitHub Action 后台工作流累加 counters.json，前端每 30 秒轮询一次；
-  //   本机 = 前端实时赋能每次实际发起 LLM 调用（含失败重试）累加 localStorage（键 hyq-local-llm-calls）。
+  //   本机 = 前端实时赋能每次实际发起大语言模型调用（含失败重试）累加 localStorage（键 hyq-local-llm-calls）。
   //   显示值 = 远端 + 本机，二者任一变化即重放弹跳动效。
-  var cntEl = document.getElementById('counter-translations');
-  var cntRemote = 0;  // 远端后台累计（counters.json，轮询刷新）
-  var cntLast = null; // 上一次显示的合计值，用于触发弹跳动效
-  var LOCAL_CALLS_KEY = 'hyq-local-llm-calls';
+  var 计数框 = document.getElementById('counter-translations');
+  var 远端累计 = 0;  // 远端后台累计（counters.json，轮询刷新）
+  var 上次合计 = null; // 上一次显示的合计值，用于触发弹跳动效
+  var 本机调用存储键 = 'hyq-local-llm-calls';
   // 读取本机实时赋能调用计数：读不到/非法按 0
-  function readLocalCalls() {
+  function 读本机调用() {
     try {
-      var n = parseInt(localStorage.getItem(LOCAL_CALLS_KEY), 10);
+      var n = parseInt(localStorage.getItem(本机调用存储键), 10);
       return (typeof n === 'number' && n >= 0) ? n : 0;
     } catch (e) { return 0; }
   }
-  var cntLocal = readLocalCalls(); // 本机实时赋能累计：以 localStorage 为持久层，内存缓存供显示
+  var 本机累计 = 读本机调用(); // 本机实时赋能累计：以 localStorage 为持久层，内存缓存供显示
   // 写穿持久化：隐私模式等写入失败时静默忽略（仅影响下次打开页面的初始值，不影响本次显示）
-  function writeLocalCalls() {
-    try { localStorage.setItem(LOCAL_CALLS_KEY, String(cntLocal)); } catch (e) { /* 忽略 */ }
+  function 写本机调用() {
+    try { localStorage.setItem(本机调用存储键, String(本机累计)); } catch (e) { /* 忽略 */ }
   }
   // 统一刷新计数显示：合计 = 远端后台累计 + 本机实时赋能累计
-  function renderCounter() {
-    var total = cntRemote + cntLocal;
-    if (total !== cntLast) {
-      cntLast = total;
-      cntEl.textContent = total;
-      cntEl.classList.remove('updated');
-      void cntEl.offsetWidth;
-      cntEl.classList.add('updated');
+  function 渲染计数() {
+    var 合计 = 远端累计 + 本机累计;
+    if (合计 !== 上次合计) {
+      上次合计 = 合计;
+      计数框.textContent = 合计;
+      计数框.classList.remove('updated');
+      void 计数框.offsetWidth;
+      计数框.classList.add('updated');
     }
   }
-  // 本机实时赋能每发起一次 LLM 调用：计数 +1 并立即刷新显示（由 llmTranslate 挂钩调用）
-  function bumpLocalCalls() {
-    cntLocal += 1;
-    writeLocalCalls();
-    renderCounter();
+  // 本机实时赋能每发起一次大语言模型调用：计数 +1 并立即刷新显示（由 补译术语 挂钩调用）
+  function 累加本机调用() {
+    本机累计 += 1;
+    写本机调用();
+    渲染计数();
   }
-  function pollTranslations() {
+  function 轮询翻译计数() {
     fetch('counters.json', { cache: 'no-store' })
-      .then(function (res) { if (!res.ok) throw new Error('HTTP ' + res.status); return res.json(); })
-      .then(function (data) {
-        var v = data && data.translations;
-        v = (typeof v === 'number' && v >= 0) ? v : 0;
-        cntRemote = v;
-        renderCounter();
+      .then(function (响应) { if (!响应.ok) throw new Error('HTTP ' + 响应.status); return 响应.json(); })
+      .then(function (数据) {
+        var 值 = 数据 && 数据.translations;
+        值 = (typeof 值 === 'number' && 值 >= 0) ? 值 : 0;
+        远端累计 = 值;
+        渲染计数();
       })
-      .catch(function () { if (cntLast === null) { cntLast = 0; cntEl.textContent = 0; } });
+      .catch(function () { if (上次合计 === null) { 上次合计 = 0; 计数框.textContent = 0; } });
   }
-  pollTranslations();
-  setInterval(pollTranslations, 30000);
+  轮询翻译计数();
+  setInterval(轮询翻译计数, 30000);
 
   // ---------- 悬浮公告（自写迷你 md 渲染器） ----------
   // 公告原文，一字不改
-  var NOTICE_MD = [
-    '## 人民锐评：用“Token”还是“词元”，事关科技话语权',
+  var 公告原文 = [
+    '## 人民锐评：用"Token"还是"词元"，事关科技话语权',
     '',
     '> 术语是科技叙事的基础单元，若核心概念的定义权、阐释权始终掌握在他人手中，中国特色科技话语体系便无从建立。这种认知层面的依附，比技术差距更隐蔽，也更影响我国科技自立自强的长远发展。',
     '',
@@ -986,61 +986,62 @@
   ].join('\n');
 
   // 行内格式：**粗体** 与 [文字](url)
-  function inlineMd(s) {
+  function 行内格式(s) {
     return s
       .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
       .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>');
   }
 
   // 块级：## 标题、> 引用、段落
-  function renderMd(md) {
-    var lines = md.split('\n');
-    var html = '';
+  function 渲染公告(md) {
+    var 行集 = md.split('\n');
+    var 网页代码 = '';
     var i = 0;
-    while (i < lines.length) {
-      var line = lines[i];
-      if (/^##\s+/.test(line)) {
-        html += '<h2>' + inlineMd(line.replace(/^##\s+/, '')) + '</h2>';
+    while (i < 行集.length) {
+      var 行 = 行集[i];
+      if (/^##\s+/.test(行)) {
+        网页代码 += '<h2>' + 行内格式(行.replace(/^##\s+/, '')) + '</h2>';
         i++;
-      } else if (/^>\s?/.test(line)) {
-        var quotes = [];
-        while (i < lines.length && /^>\s?/.test(lines[i])) {
-          quotes.push(lines[i].replace(/^>\s?/, ''));
+      } else if (/^>\s?/.test(行)) {
+        var 引文 = [];
+        while (i < 行集.length && /^>\s?/.test(行集[i])) {
+          引文.push(行集[i].replace(/^>\s?/, ''));
           i++;
         }
-        html += '<blockquote>' + quotes.map(function (q) {
-          return '<p>' + inlineMd(q) + '</p>';
+        网页代码 += '<blockquote>' + 引文.map(function (q) {
+          return '<p>' + 行内格式(q) + '</p>';
         }).join('') + '</blockquote>';
-      } else if (line.trim() === '') {
+      } else if (行.trim() === '') {
         i++;
       } else {
-        var paras = [];
-        while (i < lines.length && lines[i].trim() !== ''
-               && !/^##\s+/.test(lines[i]) && !/^>\s?/.test(lines[i])) {
-          paras.push(lines[i]);
+        var 段落 = [];
+        while (i < 行集.length && 行集[i].trim() !== ''
+               && !/^##\s+/.test(行集[i]) && !/^>\s?/.test(行集[i])) {
+          段落.push(行集[i]);
           i++;
         }
-        html += '<p>' + inlineMd(paras.join('<br>')) + '</p>';
+        网页代码 += '<p>' + 行内格式(段落.join('<br>')) + '</p>';
       }
     }
-    return html;
+    return 网页代码;
   }
 
-  var overlay = document.getElementById('announce-overlay');
-  document.getElementById('announce-body').innerHTML = renderMd(NOTICE_MD);
-  overlay.hidden = false; // 打开页面即显示
-  var closeTimer = null;
+  var 公告层 = document.getElementById('announce-overlay');
+  document.getElementById('announce-body').innerHTML = 渲染公告(公告原文);
+  公告层.hidden = false; // 打开页面即显示
+  var 关闭定时器 = null;
   document.getElementById('announce-close').addEventListener('click', function () {
-    overlay.classList.add('closing'); // 播放淡出/缩小动效后再隐藏
-    closeTimer = setTimeout(function () { overlay.hidden = true; }, 240);
+    公告层.classList.add('closing'); // 播放淡出/缩小动效后再隐藏
+    关闭定时器 = setTimeout(function () { 公告层.hidden = true; }, 240);
   });
   // 右上角「重读公告」：复用现有公告 DOM，取消隐藏并去掉 closing 类即可重新展示
   document.getElementById('btn-reread').addEventListener('click', function () {
-    if (closeTimer) { clearTimeout(closeTimer); closeTimer = null; }
-    overlay.classList.remove('closing');
-    overlay.hidden = false;
+    if (关闭定时器) { clearTimeout(关闭定时器); 关闭定时器 = null; }
+    公告层.classList.remove('closing');
+    公告层.hidden = false;
   });
 })();
+
 </script>
 </body>
 </html>
