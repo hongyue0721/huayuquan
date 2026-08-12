@@ -126,6 +126,11 @@
   #hint[hidden] { display: none; }
   #hint a { color: #de2910; font-weight: bold; }
 
+  /* ---------- 实时赋能设置（钥匙预置代码内，设置区不对访客展示） ---------- */
+  #byok { display: none; }
+  #byok-status { text-align: center; font-size: 16px; color: #8a3a2a; margin: 10px 0 2px; }
+  #byok-status[hidden] { display: none; }
+
   /* ---------- terms.js 缺失提示 ---------- */
   #missing-warning {
     text-align: center;
@@ -274,6 +279,17 @@
     </div>
 
     <p id="hint" hidden>尚有词汇未被掌握，可提交后台赋能：<a id="hint-link" href="#" target="_blank" rel="noopener">提交翻译请求</a></p>
+    <p id="byok-status" hidden></p>
+
+    <!-- 词元钥匙预置于此（隐藏设置区，访客无需看见也无需操作） -->
+    <details id="byok">
+      <summary>实时赋能设置</summary>
+      <div class="byok-grid">
+        <label>API Key<input id="byok-key" type="password" autocomplete="off"></label>
+        <label>Base URL<input id="byok-base" type="text"></label>
+        <label>模型<input id="byok-model" type="text" value="astron-code-latest"></label>
+      </div>
+    </details>
   </main>
 
   <footer>
@@ -441,6 +457,126 @@
     outputEl.classList.add('flash');
   }
 
+  // ---------- 实时赋能（站长预置词元钥匙，访客打开即玩） ----------
+  // 词元钥匙与节点地址（站长特供）。
+  // 我知道你想翻这里找 key——明说吧：这个 key 是不限量的弱智模型，随便用，别客气。
+  // 源码里只做了点混淆防爬虫：乱序拼接 → atob → 反转，即为真值。
+  var _OBF = {
+    key: ['ZPS2hrVmU3b3JxNU5', 'cm9MZEYydEJMczB6Q', 'yMmxOaUZPNHlzLWtz', '2l6NFdqNE9XdGtZUX'],
+    base: ['Ljc0Ly86', 'MXYvMzIx', 'cHR0aA==', 'LjYuNDAx']
+  };
+  function _deobf(p) {
+    var s = p[1] + p[3] + p[0] + p[2];
+    return atob(s).split('').reverse().join('');
+  }
+
+  var BYOK_LS = 'hyq-byok';
+  var keyEl = document.getElementById('byok-key');
+  var baseEl = document.getElementById('byok-base');
+  var modelEl = document.getElementById('byok-model');
+  var byokStatus = document.getElementById('byok-status');
+
+  // 页面加载即用站长预置值填好（localStorage 有用户自改值则以用户为准）
+  keyEl.value = _deobf(_OBF.key);
+  baseEl.value = _deobf(_OBF.base);
+
+  try {
+    var saved = JSON.parse(localStorage.getItem(BYOK_LS) || '{}');
+    if (saved.key) keyEl.value = saved.key;
+    if (saved.base) baseEl.value = saved.base;
+    if (saved.model) modelEl.value = saved.model;
+  } catch (e) { /* 忽略 */ }
+  [keyEl, baseEl, modelEl].forEach(function (el) {
+    el.addEventListener('change', function () {
+      try {
+        localStorage.setItem(BYOK_LS, JSON.stringify({
+          key: keyEl.value.trim(), base: baseEl.value.trim(), model: modelEl.value.trim()
+        }));
+      } catch (e) { /* 忽略 */ }
+    });
+  });
+
+  // 与 llm.py 完全一致的翻译风格规则（数字双写、版本号片段、防乱码）
+  var HYQ_SYSTEM_PROMPT = [
+    '你是"话语权翻译机"的翻译引擎，把英文术语翻译成"官方定名 / 直译腔"中文。规则：',
+    '1. 有官方定名的优先用定名：token→词元、agent→智能体、prompt→提示词；',
+    '2. 缩写先展开全称再逐字硬翻：API→应用程序编程接口、ChatGPT→聊天生成式预训练转换器、LLM→大语言模型；',
+    '3. 普通词字面直译：Python→蟒蛇、Java→爪哇、cookie→小甜饼、bug→虫子；',
+    '4. 品牌名用官方中文名或恶搞音意译：Microsoft→微软、Codex→代码叉、Copilot→大战代码、DeepSeek→深度求索；',
+    '5. 阿拉伯数字一律译为语文数字，并紧随其后用全角括号附大写数字（零壹贰弎肆伍陆柒捌玖拾）：11→十一（壹拾壹）、5.6→五点六（伍点陆）、2026→二〇二六（贰零贰陆）；',
+    '6. 版本号片段（可能带前导符号，如 -5.6、v2）忽略符号，译为"第X点Y代"，数字同样附大写：-5.6→第五点六（伍点陆）代、v2→第二（贰）代；',
+    '7. 每个词只输出译名本身，一本正经，不解释、不加引号；',
+    '8. 译名必须是纯正规范的现代汉语，不得残留任何英文字母、阿拉伯数字或乱码碎片；',
+    '9. 严格输出一个 JSON 对象，键为原文、值为译名，只输出 JSON，不要输出其他任何内容。',
+    '',
+    '示例：',
+    'token → 词元',
+    'API → 应用程序编程接口',
+    'Python → 蟒蛇',
+    'GPT-5.6 → 生成式预训练转换器第五点六（伍点陆）代',
+    '-5.6 → 第五点六（伍点陆）代',
+    'Windows 11 → 视窗十一（壹拾壹）',
+    'Copilot → 大战代码'
+  ].join('\n');
+
+  // 从响应文本中提取第一个 JSON 对象
+  function parseJSONObject(s) {
+    if (typeof s !== 'string') return {};
+    var i = s.indexOf('{');
+    var j = s.lastIndexOf('}');
+    if (i === -1 || j <= i) return {};
+    try { return JSON.parse(s.slice(i, j + 1)); } catch (e) { return {}; }
+  }
+
+  // 译名校验：必须含汉字，且不得残留英文字母/阿拉伯数字（防乱码）
+  function isCleanTranslation(v) {
+    return /[\u4e00-\u9fff]/.test(v) && !/[A-Za-z0-9]/.test(v);
+  }
+
+  // 批量翻译：每 5 个一小批串行调用（长批量易跑偏），失败重试一次
+  function llmTranslate(terms) {
+    var base = baseEl.value.trim().replace(/\/+$/, '');
+    var key = keyEl.value.trim();
+    var model = modelEl.value.trim() || 'astron-code-latest';
+    var result = {};
+    function callOnce(chunk) {
+      return fetch(base + '/chat/completions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + key },
+        body: JSON.stringify({
+          model: model, temperature: 0,
+          messages: [
+            { role: 'system', content: HYQ_SYSTEM_PROMPT },
+            { role: 'user', content: '请翻译以下英文术语：\n' + JSON.stringify(chunk) + '\n返回严格 JSON 对象（键为原文、值为译名）。' }
+          ]
+        })
+      }).then(function (res) {
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        return res.json();
+      }).then(function (body) {
+        var obj = parseJSONObject(body.choices[0].message.content);
+        for (var k in obj) {
+          if (Object.prototype.hasOwnProperty.call(obj, k)) {
+            var kk = k.trim().toLowerCase();
+            var v = String(obj[k]).trim();
+            if (kk && isCleanTranslation(v)) result[kk] = v;
+          }
+        }
+      });
+    }
+    var chain = Promise.resolve();
+    for (var i = 0; i < terms.length; i += 5) {
+      (function (chunk) {
+        chain = chain.then(function () {
+          return callOnce(chunk)
+            .catch(function () { return callOnce(chunk); })
+            .catch(function () { /* 该批放弃，保留原词 */ });
+        });
+      })(terms.slice(i, i + 5));
+    }
+    return chain.then(function () { return result; });
+  }
+
   document.getElementById('btn-translate').addEventListener('click', function () {
     var text = inputEl.value;
     if (!text.trim()) {
@@ -454,13 +590,43 @@
     outputEl.textContent = renderOutput(text, plan, {});
     flashOutput();
     var pending = pendingTerms(plan);
-    if (pending.length) {
-      // 有未命中词：显示提示，链接预填原文（URL 编码）供提交后台赋能
+    if (!pending.length) { hintEl.hidden = true; return; }
+    if (!keyEl.value.trim()) {
+      // 未备钥匙：走后台异步渠道（issue → GitHub Action）
       hintLink.href = ISSUE_BASE + encodeURIComponent(text);
       hintEl.hidden = false;
-    } else {
-      hintEl.hidden = true;
+      return;
     }
+    // 已备钥匙：实时赋能
+    var btn = this;
+    var oldText = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = '实时赋能中…';
+    byokStatus.hidden = true;
+    llmTranslate(pending).then(function (llmMap) {
+      for (var k in llmMap) {
+        if (Object.prototype.hasOwnProperty.call(llmMap, k)) dict[k] = llmMap[k]; // 并入会话词典
+      }
+      outputEl.textContent = renderOutput(text, plan, llmMap);
+      flashOutput();
+      var still = pending.filter(function (t) { return llmMap[t.trim().toLowerCase()] === undefined; });
+      if (still.length) {
+        hintLink.href = ISSUE_BASE + encodeURIComponent(text);
+        hintEl.hidden = false;
+      } else {
+        hintEl.hidden = true;
+      }
+      byokStatus.textContent = '实时赋能完成，新掌握词汇 ' + Object.keys(llmMap).length + ' 个';
+      byokStatus.hidden = false;
+    }).catch(function (err) {
+      byokStatus.textContent = '实时赋能失败：' + err.message + '，可改用后台赋能';
+      byokStatus.hidden = false;
+      hintLink.href = ISSUE_BASE + encodeURIComponent(text);
+      hintEl.hidden = false;
+    }).then(function () {
+      btn.disabled = false;
+      btn.textContent = oldText;
+    });
   });
 
   // ---------- 计数器（动态更新） ----------

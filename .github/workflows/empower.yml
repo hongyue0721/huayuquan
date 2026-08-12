@@ -52,11 +52,15 @@ jobs:
         run: |
           python3 -c 'import json, os; p="counters.json"; d=json.load(open(p, encoding="utf-8")) if os.path.exists(p) else {}; d["translations"]=d.get("translations", 0)+1; open(p, "w", encoding="utf-8").write(json.dumps(d, ensure_ascii=False, indent=2)+"\n")'
 
-      - name: 提交并推送计数器
+      - name: 重建网页词典 terms.js（合并 LLM 新译名）
+        if: github.event_name == 'issues'
+        run: python3 build_web_dict.py
+
+      - name: 提交并推送计数器、新词与词典
         if: github.event_name == 'issues'
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add counters.json
-          git diff --cached --quiet || git commit -m "chore: 累加翻译计数 [skip ci]"
+          git add counters.json cache.json terms.js terms/
+          git diff --cached --quiet || git commit -m "chore: 后台赋能（计数+新词+词典重建） [skip ci]"
           git push
