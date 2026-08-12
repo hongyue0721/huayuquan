@@ -32,7 +32,10 @@ jobs:
           HYQ_MODEL: ${{ secrets.HYQ_MODEL }}
         run: |
           if [ -f /tmp/issue_body.txt ]; then
-            python3 translate.py --file /tmp/issue_body.txt > /tmp/translated.txt
+            # stderr 单独捕获：translate.py 结束时打印 llm_calls=N（真实 LLM 调用次数）
+            python3 translate.py --file /tmp/issue_body.txt > /tmp/translated.txt 2> /tmp/translate_stderr.txt
+          else
+            : > /tmp/translate_stderr.txt
           fi
 
       - name: 把翻译结果评论回 issue
@@ -50,7 +53,13 @@ jobs:
       - name: 累加 counters.json 翻译计数
         if: github.event_name == 'issues'
         run: |
-          python3 -c 'import json, os; p="counters.json"; d=json.load(open(p, encoding="utf-8")) if os.path.exists(p) else {}; d["translations"]=d.get("translations", 0)+1; open(p, "w", encoding="utf-8").write(json.dumps(d, ensure_ascii=False, indent=2)+"\n")'
+          # 累加本次翻译的真实 LLM 调用次数（读取 stderr 的 llm_calls=N）；解析失败兜底加 1（保持既有行为）
+          N=1
+          if [ -f /tmp/translate_stderr.txt ]; then
+            CALLS=$(sed -n 's/^llm_calls=\([0-9][0-9]*\)$/\1/p' /tmp/translate_stderr.txt | tail -n 1)
+            if [ -n "$CALLS" ]; then N="$CALLS"; fi
+          fi
+          python3 -c 'import json, os, sys; p="counters.json"; d=json.load(open(p, encoding="utf-8")) if os.path.exists(p) else {}; d["translations"]=d.get("translations", 0)+int(sys.argv[1]); open(p, "w", encoding="utf-8").write(json.dumps(d, ensure_ascii=False, indent=2)+"\n")' "$N"
 
       - name: 重建网页词典 terms.js（合并 LLM 新译名）
         if: github.event_name == 'issues'

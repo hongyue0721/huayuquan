@@ -27,6 +27,73 @@ SEG_RE = re.compile(r"[A-Za-z0-9]+(?:[ \t.+#_-][A-Za-z0-9]+)*")
 # 模式 B 的单词核心：剥离首尾标点
 TOKEN_RE = re.compile(r"^([^\w]*)(.*?)([^\w]*)$", re.S)
 
+# ---------- 阿拉伯数字本地转换（纯数字不进 LLM，直接译为语文数字，大小写双写） ----------
+NUM_DIGITS = "零一二三四五六七八九"
+NUM_DIGITS_BIG = "零壹贰叁肆伍陆柒捌玖"
+NUM_UNITS = ("", "十", "百", "千")
+NUM_UNITS_BIG = ("", "拾", "佰", "仟")
+NUM_SECTIONS = ("", "万", "亿", "万亿", "亿亿")
+NUM_RE = re.compile(r"\d+(?:\.\d+)?")
+
+
+def _read_section(sec, big):
+    """读一段（最多四位）：返回该段小写/大写读法，段内零按规则补「零」。"""
+    digs = NUM_DIGITS_BIG if big else NUM_DIGITS
+    units = NUM_UNITS_BIG if big else NUM_UNITS
+    out = []
+    zero = False
+    for i, ch in enumerate(sec):
+        d = int(ch)
+        pos = len(sec) - 1 - i
+        if d == 0:
+            zero = True
+        else:
+            if zero and out:
+                out.append(digs[0])
+            out.append(digs[d] + units[pos])
+            zero = False
+    return "".join(out)
+
+
+def _int_zh(num_str, big):
+    """整数读法：按 4 位一节，节间补「零」；小写按约定省略最高位「一十」的「一」。"""
+    digits = num_str.lstrip("0") or "0"
+    if digits == "0":
+        return "零"
+    sections = []
+    i = len(digits)
+    while i > 0:
+        start = i - 4 if i - 4 > 0 else 0
+        sections.append(digits[start:i])
+        i = start
+    out = []
+    for s in range(len(sections) - 1, -1, -1):
+        sec = _read_section(sections[s], big)
+        if sec:
+            if s < len(sections) - 1 and out and int(sections[s]) < 1000:
+                out.append("零")
+            out.append(sec + (NUM_SECTIONS[s] if s else ""))
+    text = "".join(out)
+    if not big and text.startswith("一十") and digits.startswith("1") and len(digits) % 4 == 2:
+        text = text[1:]
+    return text
+
+
+def num_zh(s):
+    """阿拉伯数字 → 语文数字（小写（大写））；非纯数字返回 None。
+
+    例：2000 → 二千（贰仟）、3.14 → 三点一四（叁点壹肆）、11 → 十一（壹拾壹）。
+    """
+    if not NUM_RE.fullmatch(s):
+        return None
+    parts = s.split(".")
+    small = _int_zh(parts[0], False)
+    big = _int_zh(parts[0], True)
+    if len(parts) > 1:
+        small += "点" + "".join(NUM_DIGITS[int(ch)] for ch in parts[1])
+        big += "点" + "".join(NUM_DIGITS_BIG[int(ch)] for ch in parts[1])
+    return "%s（%s）" % (small, big)
+
 
 def load_json_dict(path):
     """读扁平 JSON 词典，key 统一小写；文件缺失或损坏返回 {}。"""
@@ -96,10 +163,11 @@ def split_segment(seg, lookup, keys_desc):
     def flush():
         if buf:
             # 连续未知段按空白切成单词级碎片：逐个查/译，
-            # 反哺进缓存的是干净单词而非 "uses quantization" 这种一次性短语
+            # 反哺进缓存的是干净单词而非 "uses quantization" 这种一次性短语；
+            # 纯数字碎片（^\d+(\.\d+)?$）不进 LLM，本地转语文数字（repl 非 None）
             for piece in re.split(r"(\s+)", "".join(buf)):
                 if piece:
-                    pieces.append((piece, None))
+                    pieces.append((piece, num_zh(piece) if NUM_RE.fullmatch(piece) else None))
             del buf[:]
 
     while i < n:
@@ -260,6 +328,8 @@ def main(argv=None):
     if not output.endswith("\n"):
         output += "\n"
     sys.stdout.write(output)
+    # 真实 LLM 调用次数（--no-llm 或未调用时为 0）：GitHub Action 据此累加 counters.json
+    sys.stderr.write("llm_calls=%d\n" % llm.call_count())
     return 0
 
 

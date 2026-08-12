@@ -339,6 +339,7 @@ window.TERMS = {
   "hallucination": "幻觉",
   "hand": "手",
   "hard": "坚硬",
+  "harness": "鞍具",
   "has": "有",
   "have": "拥有",
   "having": "拥有",

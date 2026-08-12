@@ -15,6 +15,14 @@ import urllib.request
 BASE_URL_DEFAULT = "https://api.deepseek.com"
 MODEL_DEFAULT = "deepseek-chat"
 
+# 模块级计数器：每实际发起一次 HTTP 请求 +1（含失败与重试），供 translate.py 打印 llm_calls=N
+_LLM_CALLS = 0
+
+
+def call_count():
+    """本次进程已发起过的真实 HTTP 请求次数。"""
+    return _LLM_CALLS
+
 SYSTEM_PROMPT = """你是"话语权翻译机"的翻译引擎，把英文术语翻译成"官方定名 / 直译腔"中文。规则：
 1. 有官方定名的优先用定名：token→词元、agent→智能体、prompt→提示词；
 2. 缩写先展开全称再逐字硬翻：API→应用程序编程接口、ChatGPT→聊天生成式预训练转换器、LLM→大语言模型；
@@ -80,6 +88,7 @@ def _extract_first_json(text):
 
 def _post_chat(terms):
     """单次批量调用，返回 {原词: 译名}；任何失败返回 {}。"""
+    global _LLM_CALLS
     api_key = _first_env("HYQ_API_KEY", "DEEPSEEK_API_KEY", "OPENAI_API_KEY")
     if not api_key:
         return {}
@@ -102,6 +111,7 @@ def _post_chat(terms):
         method="POST",
     )
     try:
+        _LLM_CALLS += 1  # 实际发起 HTTP 请求（含失败与重试）
         with urllib.request.urlopen(req, timeout=60) as resp:
             body = json.loads(resp.read().decode("utf-8"))
         content = body["choices"][0]["message"]["content"]

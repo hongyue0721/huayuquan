@@ -1,4 +1,4 @@
-# 话语权翻译机
+# 科技话语权赋能设备
 
 # ~~vibecoding~~ 氛围编码的烂活，补药拷打我
 
@@ -20,7 +20,7 @@
 联网模式下，预期输出风格如下（示意；个别未命中词由 LLM 补译，可能略有出入）：
 
 ```
-我启动了视窗十一操作系统，打开桌面上已经更名为聊天生成式预训练转换器的代码叉，正想选择生成式预训练转换器第五点六代太阳版，
+我启动了视窗十一（壹拾壹）操作系统，打开桌面上已经更名为聊天生成式预训练转换器的代码叉，正想选择生成式预训练转换器第五点六代太阳版，
 结果发现本周的词元已用尽。无奈启动了微软大战代码，把供应商调整为第三方的深度求索。
 我首先检查了应用程序编程接口请求地址和应用程序编程接口秘钥是否正常，然后确认模型是深度求索模型第四代闪光版，
 最后保存，编写了一些蟒蛇代码，然后愉快地消耗了两千万词元。
@@ -67,48 +67,30 @@ cat input.txt | python3 translate.py
 | `--mode a\|b` | 翻译模式，默认 `a`。模式 A：中英混合输入，只换英文术语，产出通顺官腔文；模式 B：纯英文输入，按空格逐词硬翻（标点保留），产出塑料中文腔 |
 | `--no-llm` | 离线模式：只用词典 + 缓存，未命中词保持原样 |
 
+每次运行结束会向 stderr 打印一行 `llm_calls=N`（N 为本次真实发起的 LLM 调用次数，`--no-llm` 或未调用时为 0），供 GitHub Action 累加赋能次数。
+
 ## 网页版用法
 
-网页版名为「话语权掌握器」，单文件应用、零外部依赖，无需服务器：
+网页版名为「科技话语权赋能设备」，单文件应用、零外部依赖，无需服务器：
 
-1. 先运行 `python3 build_web_dict.py` 合并词典，生成 `terms.js`（合并 `terms/seed.json` + `cache.json`）；
-2. 直接用浏览器打开 `index.html`；
-3. 在输入框粘贴原文，点击「点击掌握话语权」按钮翻译。
+1. 打开即玩：词元钥匙已由站长预置，无需任何配置即可实时赋能；
+2. 在输入框粘贴原文，点击「点击掌握话语权」按钮翻译；
+3. 点击输出区任意位置即可复制译文到剪贴板；
+4. 译后可在下方评价：👍 赞同把本次实时赋能成果写入词典缓存，👎 不赞同则丢弃本次新词；一译一票，不跨次累加；
+5. 页面右上角「重读公告」可随时重新弹出公告，「代码枢纽」直达仓库源码。
 
-- 网页版实现与 CLI 一致的切分 + 最长匹配逻辑（JS 版），输入框实时输出译文；
-- 若 `terms.js` 缺失，页面会提示"请先运行 python3 build_web_dict.py"；
-- **BYOK（Bring Your Own Key）**：页面内置可折叠的 BYOK 区域，自行填入 API Key / Base URL / Model，前端直连 OpenAI 兼容接口批量翻译未命中词，结果并入当前会话词典，可导出为 `cache.json` 下载。
+- 网页版实现与 CLI 一致的切分 + 最长匹配逻辑（JS 版）；
+- 纯中文输入不再无反馈：提示"通篇皆为规范中文，话语权已牢牢掌握，无需双向赋能"；
+- 纯数字（年份、计数等）本地直接转为语文数字（2000 → 二千（贰仟）），不消耗词元；
+- 本地打开 `index.html` 前需先运行 `python3 build_web_dict.py` 生成 `terms.js`（线上版本已预置），缺失时页面会提示。
 
 ## 后台赋能（GitHub Actions 托管）
 
 不想自己跑 Python？仓库内置 GitHub Actions 工作流 `.github/workflows/empower.yml`，在 GitHub 上即可完成翻译与计数：
 
-1. **部署者配置密钥**：在仓库 **Settings → Secrets and variables → Actions** 新建三个 secret：`HYQ_API_KEY`（必填）、`HYQ_BASE_URL`（可选，默认 `https://api.deepseek.com`）、`HYQ_MODEL`（可选，默认 `deepseek-chat`）；
-2. **用户使用**：在 Issues 里新建一个标题含「翻译请求」的 issue，把原文粘贴到正文并提交即可。Actions 会自动用 `translate.py` 翻译，并以评论形式把结果回复到该 issue，同时把 `counters.json` 里的 `translations` 字段累加 1，即「技术突破与文化自信双向赋能次数」；
-3. **GitHub Pages 部署**：仓库 **Settings → Pages** → Source 选「Deploy from a branch」→ 分支选默认分支、目录选「/(root)」→ Save，即可通过 `https://<用户名>.github.io/<仓库名>/` 访问网页版「话语权掌握器」。
-
-> **密钥安全**：该架构下 `HYQ_API_KEY` 等只存在于仓库 Secrets 中，前端页面与仓库代码里均不出现任何密钥；Actions 仅在运行时通过 `secrets.HYQ_*` 注入临时环境变量，翻译结束即丢弃。
-
-## 环境变量配置
-
-LLM 调用为 OpenAI 兼容接口，仅依赖 Python 标准库（urllib），无需安装任何第三方包。环境变量按优先级读取：
-
-| 变量 | 优先级 / 默认值 |
-| --- | --- |
-| `HYQ_API_KEY` | 最高优先级 |
-| `DEEPSEEK_API_KEY` | 次之 |
-| `OPENAI_API_KEY` | 兜底 |
-| `HYQ_BASE_URL` | 默认 `https://api.deepseek.com` |
-| `HYQ_MODEL` | 默认 `deepseek-chat` |
-
-示例：
-
-```bash
-export HYQ_API_KEY="sk-xxx"
-export HYQ_BASE_URL="https://api.deepseek.com"
-export HYQ_MODEL="deepseek-chat"
-python3 translate.py "我启动了 Windows 11"
-```
+1. **用户使用**：在 Issues 里新建一个标题含「翻译请求」的 issue，把原文粘贴到正文并提交即可。Actions 会自动用 `translate.py` 翻译，并以评论形式把结果回复到该 issue；
+2. **赋能计数**：`counters.json` 里的 `translations` 字段累加本次翻译的真实 LLM 调用次数（读取 translate.py 打到 stderr 的 `llm_calls=N`；解析失败时兜底加 1），即「技术突破与文化自信双向赋能次数」；
+3. **GitHub Pages 部署**：仓库 **Settings → Pages** → Source 选「Deploy from a branch」→ 分支选默认分支、目录选「/(root)」→ Save，即可通过 `https://<用户名>.github.io/<仓库名>/` 访问网页版「科技话语权赋能设备」。
 
 ## 词典与缓存机制
 

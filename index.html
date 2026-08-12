@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>话语权掌握器</title>
+<title>科技话语权赋能设备</title>
 <script src="terms.js"></script>
 <style>
   * { box-sizing: border-box; }
@@ -94,7 +94,7 @@
     font-family: ui-monospace, "Cascadia Mono", Consolas, "Courier New", monospace;
     font-size: 16px;
   }
-  #output { font-family: inherit; }
+  #output { font-family: inherit; cursor: pointer; }
   textarea:focus { outline: none; border-color: #de2910; box-shadow: 0 0 0 3px rgba(222, 41, 16, 0.12); }
 
   /* ---------- 大按钮 ---------- */
@@ -131,7 +131,7 @@
   #byok-status { text-align: center; font-size: 16px; color: #8a3a2a; margin: 10px 0 2px; }
   #byok-status[hidden] { display: none; }
 
-  /* ---------- 译后评价（👍/👎，票数持久化到 localStorage） ---------- */
+  /* ---------- 译后评价（👍/👎，一译一票，不跨次累加） ---------- */
   #vote-area {
     text-align: center;
     margin: 12px 0 4px;
@@ -297,7 +297,7 @@
 
   /* ---------- 移动端（<768px）：两栏上下堆叠、按钮全宽 ---------- */
   @media (max-width: 767px) {
-    h1 { font-size: 34px; letter-spacing: 6px; text-indent: 6px; }
+    h1 { font-size: 30px; letter-spacing: 4px; text-indent: 4px; }
     main { padding: 16px 14px 8px; }
     .panes { grid-template-columns: 1fr; }
     textarea, #output { min-height: 220px; }
@@ -315,7 +315,7 @@
   <div id="missing-warning" hidden>请先运行 python3 build_web_dict.py</div>
 
   <header>
-    <h1>话语权掌握器</h1>
+    <h1>科技话语权赋能设备</h1>
   </header>
 
   <main>
@@ -328,7 +328,7 @@
         <textarea id="input" placeholder="粘贴中英混合文本，点击下方按钮后为您双向赋能…"></textarea>
       </section>
       <section class="pane">
-        <label for="output">双向赋能话语权</label>
+        <label for="output" id="output-label">双向赋能话语权</label>
         <div id="output"></div>
       </section>
     </div>
@@ -340,7 +340,7 @@
     <p id="hint" hidden>尚有词汇未被掌握，可提交后台赋能：<a id="hint-link" href="#" target="_blank" rel="noopener">提交翻译请求</a></p>
     <p id="byok-status" hidden></p>
 
-    <!-- 译后评价：翻译成功完成后展示，票数存 localStorage -->
+    <!-- 译后评价：翻译成功完成后展示，一译一票，不跨次累加 -->
     <div id="vote-area" hidden>
       <p id="vote-prompt">对此次赋能的结果评价如何？</p>
       <div>
@@ -421,8 +421,77 @@
     return best;
   }
 
+  // ---------- 阿拉伯数字本地转换（纯数字不进 LLM，直接译为语文数字，大小写双写） ----------
+  var NUM_DIGITS = ['零','一','二','三','四','五','六','七','八','九'];
+  var NUM_DIGITS_BIG = ['零','壹','贰','叁','肆','伍','陆','柒','捌','玖'];
+  var NUM_UNITS = ['', '十', '百', '千'];
+  var NUM_UNITS_BIG = ['', '拾', '佰', '仟'];
+  var NUM_SECTIONS = ['', '万', '亿', '万亿', '亿亿'];
+
+  // 读一段（最多四位）：返回该段的小写/大写读法，段内零按规则补「零」
+  function readNumSection(sec, big) {
+    var digs = big ? NUM_DIGITS_BIG : NUM_DIGITS;
+    var units = big ? NUM_UNITS_BIG : NUM_UNITS;
+    var out = '';
+    var zero = false;
+    for (var i = 0; i < sec.length; i++) {
+      var d = sec.charCodeAt(i) - 48;
+      var pos = sec.length - 1 - i;
+      if (d === 0) {
+        zero = true;
+      } else {
+        if (zero && out) out += digs[0];
+        out += digs[d] + units[pos];
+        zero = false;
+      }
+    }
+    return out;
+  }
+
+  // 整数读法：按 4 位一节，节间补「零」；小写按约定省略最高位「一十」的「一」
+  function intToZh(numStr, big) {
+    var digits = numStr.replace(/^0+/, '') || '0';
+    if (digits === '0') return '零';
+    var sections = [];
+    for (var i = digits.length; i > 0; i -= 4) {
+      var start = (i - 4 < 0) ? 0 : i - 4;
+      sections.push(digits.slice(start, i));
+    }
+    var out = '';
+    for (var s = sections.length - 1; s >= 0; s--) {
+      var sec = readNumSection(sections[s], big);
+      if (sec) {
+        if (s < sections.length - 1 && out && parseInt(sections[s], 10) < 1000) out += '零';
+        out += sec + (s > 0 ? NUM_SECTIONS[s] : '');
+      }
+    }
+    if (!big && out.indexOf('一十') === 0 && digits.charAt(0) === '1' && digits.length % 4 === 2) {
+      out = out.slice(1);
+    }
+    return out;
+  }
+
+  // 纯数字（^\d+(\.\d+)?$）→ 语文数字（小写（大写）），如 2000 → 二千（贰仟）、3.14 → 三点一四（叁点壹肆）
+  function numZh(s) {
+    if (!/^\d+(\.\d+)?$/.test(s)) return null;
+    var p = s.split('.');
+    var small = intToZh(p[0], false);
+    var big = intToZh(p[0], true);
+    if (p.length > 1) {
+      var fs = '', fb = '';
+      for (var i = 0; i < p[1].length; i++) {
+        var d = p[1].charCodeAt(i) - 48;
+        fs += NUM_DIGITS[d];
+        fb += NUM_DIGITS_BIG[d];
+      }
+      small += '点' + fs;
+      big += '点' + fb;
+    }
+    return small + '（' + big + '）';
+  }
+
   // 整段未命中时：段内从左到右最长匹配切分（词典合查）
-  // 返回 { matched: [{start,end,key}], unknownRuns: [{start,end,term}] }
+  // 返回 { matched: [{start,end,key}], numRuns: [{start,end,text}], unknownRuns: [{start,end,term}] }
   function segmentPlan(seg) {
     var keys = Object.keys(dict);
     var matched = [];
@@ -434,6 +503,7 @@
     }
     // 匹配之间的空隙：先整段查词典（如已缓存的残余词条），再收为未知词。
     // 残余原样保留（含边缘空白）。
+    var numRuns = [];
     var unknownRuns = [];
     var pos = 0, idx = 0;
     while (pos < n) {
@@ -443,17 +513,24 @@
         var low = term.trim().toLowerCase();
         if (low && dict[low] !== undefined) matched.push({ start: pos, end: next, key: low });
         else if (low) {
-          // 空白切成单词级未知碎片：逐个赋能，反哺词典的是干净单词而非一次性短语
+          // 空白切成单词级未知碎片：纯数字（^\d+(\.\d+)?$）本地转语文数字，不进 unknowns；
+          // 其余逐个赋能，反哺词典的是干净单词而非一次性短语
           var wre = /\S+/g, wm;
           while ((wm = wre.exec(term)) !== null) {
-            unknownRuns.push({ start: pos + wm.index, end: pos + wm.index + wm[0].length, term: wm[0] });
+            var w = wm[0];
+            var numT = numZh(w);
+            if (numT) {
+              numRuns.push({ start: pos + wm.index, end: pos + wm.index + w.length, text: numT });
+            } else {
+              unknownRuns.push({ start: pos + wm.index, end: pos + wm.index + w.length, term: w });
+            }
           }
         }
       }
       if (idx < matched.length) { pos = matched[idx].end; idx++; }
       else pos = n;
     }
-    return { matched: matched, unknownRuns: unknownRuns };
+    return { matched: matched, numRuns: numRuns, unknownRuns: unknownRuns };
   }
 
   // 整段切分：返回 { pieces: [{start,end,text}], unknowns: [{start,end,term}] }
@@ -473,6 +550,11 @@
       for (var i = 0; i < plan.matched.length; i++) {
         var mt = plan.matched[i];
         pieces.push({ start: s + mt.start, end: s + mt.end, text: dict[mt.key] });
+      }
+      // 纯数字碎片：本地已转语文数字，直接并入译名片段
+      for (var k = 0; k < plan.numRuns.length; k++) {
+        var nr = plan.numRuns[k];
+        pieces.push({ start: s + nr.start, end: s + nr.end, text: nr.text });
       }
       for (var j = 0; j < plan.unknownRuns.length; j++) {
         var u = plan.unknownRuns[j];
@@ -536,6 +618,43 @@
     void outputEl.offsetWidth;
     outputEl.classList.add('flash');
   }
+
+  // ---------- 输出区点击复制 ----------
+  // 老式兜底：textarea + execCommand('copy')，兼容非 https 环境
+  function legacyCopy(text) {
+    var ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.position = 'fixed';
+    ta.style.opacity = '0';
+    document.body.appendChild(ta);
+    ta.select();
+    try { document.execCommand('copy'); } catch (e) { /* 忽略 */ }
+    document.body.removeChild(ta);
+  }
+
+  var outputLabelEl = document.getElementById('output-label');
+  var OUTPUT_LABEL_TITLE = outputLabelEl.textContent; // 面板标题原文（复制后临时改字再改回）
+  var copyTimer = null;
+
+  // 点击 #output 复制其文本；成功后面板标题临时改为「已复制到剪贴板」1.5 秒
+  outputEl.addEventListener('click', function () {
+    var text = outputEl.textContent;
+    if (!text) return;
+    var done = function () {
+      outputLabelEl.textContent = '已复制到剪贴板';
+      if (copyTimer) clearTimeout(copyTimer);
+      copyTimer = setTimeout(function () { outputLabelEl.textContent = OUTPUT_LABEL_TITLE; }, 1500);
+    };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(done).catch(function () {
+        legacyCopy(text);
+        done();
+      });
+    } else {
+      legacyCopy(text);
+      done();
+    }
+  });
 
   // ---------- 实时赋能（站长预置词元钥匙，访客打开即玩） ----------
   // 词元钥匙与节点地址（站长特供）。
@@ -671,6 +790,15 @@
     }
     // 先本地词典离线翻译并立即显示
     var plan = buildPlan(text);
+    if (!plan.pieces.length && !plan.unknowns.length) {
+      // 通篇无英文段（纯中文输入）：无需赋能，直接反馈，不展示评价区
+      outputEl.textContent = '通篇皆为规范中文，话语权已牢牢掌握，无需双向赋能。';
+      hintEl.hidden = true;
+      byokStatus.hidden = true;
+      voteAreaEl.hidden = true;
+      flashOutput();
+      return;
+    }
     outputEl.textContent = renderOutput(text, plan, {});
     flashOutput();
     var pending = pendingTerms(plan);
@@ -703,7 +831,7 @@
       } else {
         hintEl.hidden = true;
       }
-      byokStatus.textContent = '实时赋能完成，新掌握词汇 ' + Object.keys(llmMap).length + ' 个';
+      byokStatus.textContent = '实时赋能完成';
       byokStatus.hidden = false;
       resetVoteArea();
       voteAreaEl.hidden = false; // 翻译成功：展示译后评价区
@@ -718,10 +846,7 @@
     });
   });
 
-  // ---------- 译后评价（👍/👎） ----------
-  // 累计票数存 localStorage（key 如 hyq-vote-up / hyq-vote-down），读不到按 0
-  var VOTE_UP_LS = 'hyq-vote-up';
-  var VOTE_DOWN_LS = 'hyq-vote-down';
+  // ---------- 译后评价（👍/👎，一译一票，不跨次累加） ----------
   var pendingLlmMap = null; // 实时赋能结果：待用户评价后决定是否并入会话词典（不评价则丢弃）
   var voted = false;        // 同一次翻译内是否已投票（只能投一票）
   var voteAreaEl = document.getElementById('vote-area');
@@ -729,68 +854,43 @@
   var voteUpBtn = document.getElementById('vote-up');
   var voteDownBtn = document.getElementById('vote-down');
 
-  function readVote(lsKey) {
-    try {
-      var n = parseInt(localStorage.getItem(lsKey), 10);
-      return (typeof n === 'number' && !isNaN(n) && n > 0) ? n : 0;
-    } catch (e) { return 0; }
-  }
-
-  function writeVote(lsKey, n) {
-    try { localStorage.setItem(lsKey, String(n)); } catch (e) { /* 忽略 */ }
-  }
-
-  // 按钮上实时展示累计票数
-  function renderVoteCounts() {
-    voteUpBtn.textContent = '👍 赞同 ' + readVote(VOTE_UP_LS);
-    voteDownBtn.textContent = '👎 不赞同 ' + readVote(VOTE_DOWN_LS);
-  }
-
   // 重置为可投状态（每次翻译完成、以及页面初始化时调用）
   function resetVoteArea() {
     voted = false;
     votePromptEl.textContent = '对此次赋能的结果评价如何？';
     voteUpBtn.disabled = false;
     voteDownBtn.disabled = false;
-    renderVoteCounts();
+    voteUpBtn.textContent = '👍 赞同';
+    voteDownBtn.textContent = '👎 不赞同';
   }
 
   // 👍：并入会话词典（真正命中缓存）；👎：丢弃本次新词，不写入缓存
   function submitVote(up) {
     if (voted) return; // 同一次翻译内只能投一票
     voted = true;
-    writeVote(up ? VOTE_UP_LS : VOTE_DOWN_LS, readVote(up ? VOTE_UP_LS : VOTE_DOWN_LS) + 1);
-    renderVoteCounts();
     voteUpBtn.disabled = true;
     voteDownBtn.disabled = true;
-    var cnt = pendingLlmMap ? Object.keys(pendingLlmMap).length : 0;
     if (up) {
-      votePromptEl.textContent = '已收到您的评价，感谢认可！';
+      votePromptEl.textContent = '已收到您的评价';
       if (pendingLlmMap) {
         for (var k in pendingLlmMap) {
           if (Object.prototype.hasOwnProperty.call(pendingLlmMap, k)) dict[k] = pendingLlmMap[k];
         }
-        if (cnt > 0) {
-          byokStatus.textContent = '已收到好评，本次实时赋能成果已写入缓存，新掌握词汇 ' + cnt + ' 个';
-          byokStatus.hidden = false;
-        }
         pendingLlmMap = null;
       }
+      byokStatus.textContent = '感谢你为文化赋能做出的贡献';
+      byokStatus.hidden = false;
     } else {
-      votePromptEl.textContent = '已收到您的评价，感谢反馈！';
-      if (pendingLlmMap) {
-        if (cnt > 0) {
-          byokStatus.textContent = '已收到差评，本次新词未写入缓存';
-          byokStatus.hidden = false;
-        }
-        pendingLlmMap = null;
-      }
+      votePromptEl.textContent = '已收到您的评价';
+      pendingLlmMap = null; // 丢弃本次新词，不写入缓存
+      byokStatus.textContent = '您的指责是我们通往文化自信的动力';
+      byokStatus.hidden = false;
     }
   }
 
   voteUpBtn.addEventListener('click', function () { submitVote(true); });
   voteDownBtn.addEventListener('click', function () { submitVote(false); });
-  resetVoteArea(); // 初始化：按 localStorage 累计票数渲染两个按钮
+  resetVoteArea(); // 初始化：按钮文案固定为「👍 赞同」「👎 不赞同」
 
   // ---------- 计数器（动态更新） ----------
   // 已掌握话语权人数：busuanzi 站点 UV，每 60 秒重拉一次保持新鲜；加载失败显示「统计中」
@@ -851,7 +951,9 @@
     '',
     '> 语言为科技载道，文化为发展立根。唯有筑牢母语根基、掌握话语主动权，我们才能在全球科技竞争中，实现技术突破与文化自信的双向赋能，助力科技强国建设行稳致远。',
     '',
-    '—— [人民网·观点频道，2026年8月5日](http://opinion.people.com.cn/n1/2026/0805/c436867-40774551.html)'
+    '—— [人民网·观点频道，2026年8月5日](http://opinion.people.com.cn/n1/2026/0805/c436867-40774551.html)',
+    '',
+    '本项目旨在科技文化双向赋能，增加科技话语权。'
   ].join('\n');
 
   // 行内格式：**粗体** 与 [文字](url)
