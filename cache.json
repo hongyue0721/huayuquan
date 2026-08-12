@@ -6,8 +6,11 @@
   "tokenizer": "分词器",
   "sonnet 4.5": "十四行诗第四点五（肆点伍）代",
   "chain of thought": "思维链",
-  "uses quantization": "使用量化",
-  "finetuning to reduce": "微调以减少",
   "in": "在",
-  "pipeline": "管道"
+  "pipeline": "管道",
+  "uses": "使用",
+  "quantization": "量化",
+  "finetuning": "微调",
+  "to": "至",
+  "reduce": "减少"
 }

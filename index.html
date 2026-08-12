@@ -368,7 +368,13 @@
         var term = seg.slice(pos, next);
         var low = term.trim().toLowerCase();
         if (low && dict[low] !== undefined) matched.push({ start: pos, end: next, key: low });
-        else if (low) unknownRuns.push({ start: pos, end: next, term: term });
+        else if (low) {
+          // 空白切成单词级未知碎片：逐个赋能，反哺词典的是干净单词而非一次性短语
+          var wre = /\S+/g, wm;
+          while ((wm = wre.exec(term)) !== null) {
+            unknownRuns.push({ start: pos + wm.index, end: pos + wm.index + wm[0].length, term: wm[0] });
+          }
+        }
       }
       if (idx < matched.length) { pos = matched[idx].end; idx++; }
       else pos = n;

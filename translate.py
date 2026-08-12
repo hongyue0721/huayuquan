@@ -95,7 +95,11 @@ def split_segment(seg, lookup, keys_desc):
 
     def flush():
         if buf:
-            pieces.append(("".join(buf), None))
+            # 连续未知段按空白切成单词级碎片：逐个查/译，
+            # 反哺进缓存的是干净单词而非 "uses quantization" 这种一次性短语
+            for piece in re.split(r"(\s+)", "".join(buf)):
+                if piece:
+                    pieces.append((piece, None))
             del buf[:]
 
     while i < n:
