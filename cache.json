@@ -12,5 +12,11 @@
   "quantization": "量化",
   "finetuning": "微调",
   "to": "至",
-  "reduce": "减少"
+  "reduce": "减少",
+  "deployed": "已部署",
+  "a": "一（壹）",
+  "sandboxed": "沙盒化",
+  "runtime": "运行时",
+  "observability": "可观测性",
+  "rollback": "回滚"
 }
