@@ -1,0 +1,62 @@
+name: 后台赋能翻译
+
+on:
+  issues:
+    types: [opened, edited]
+  workflow_dispatch:
+
+permissions:
+  issues: write
+  contents: write
+
+jobs:
+  empower:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 检出仓库
+        uses: actions/checkout@v4
+
+      - name: 将 issue 正文写入临时文件
+        env:
+          # 用环境变量传递，避免 shell 注入（不直接把正文拼进命令）
+          ISSUE_BODY: ${{ github.event.issue.body }}
+        run: |
+          if [ -n "$ISSUE_BODY" ]; then
+            printf '%s\n' "$ISSUE_BODY" > /tmp/issue_body.txt
+          fi
+
+      - name: 用仓库里的 translate.py 翻译
+        env:
+          HYQ_API_KEY: ${{ secrets.HYQ_API_KEY }}
+          HYQ_BASE_URL: ${{ secrets.HYQ_BASE_URL }}
+          HYQ_MODEL: ${{ secrets.HYQ_MODEL }}
+        run: |
+          if [ -f /tmp/issue_body.txt ]; then
+            python3 translate.py --file /tmp/issue_body.txt > /tmp/translated.txt
+          fi
+
+      - name: 把翻译结果评论回 issue
+        if: github.event_name == 'issues'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+        run: |
+          if [ -f /tmp/translated.txt ]; then
+            printf '### 后台赋能翻译结果\n\n' > /tmp/comment.txt
+            cat /tmp/translated.txt >> /tmp/comment.txt
+            gh issue comment "$ISSUE_NUMBER" --body-file /tmp/comment.txt
+          fi
+
+      - name: 累加 counters.json 翻译计数
+        if: github.event_name == 'issues'
+        run: |
+          python3 -c 'import json, os; p="counters.json"; d=json.load(open(p, encoding="utf-8")) if os.path.exists(p) else {}; d["translations"]=d.get("translations", 0)+1; open(p, "w", encoding="utf-8").write(json.dumps(d, ensure_ascii=False, indent=2)+"\n")'
+
+      - name: 提交并推送计数器
+        if: github.event_name == 'issues'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add counters.json
+          git diff --cached --quiet || git commit -m "chore: 累加翻译计数 [skip ci]"
+          git push

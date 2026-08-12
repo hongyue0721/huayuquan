@@ -1,0 +1,580 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>话语权掌握器</title>
+<script src="terms.js"></script>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: #ffffff;
+    color: #1a1a1a;
+    font-family: "Songti SC", "Noto Serif CJK SC", "Source Han Serif SC", "SimSun", "PingFang SC", serif;
+    font-size: 18px; /* 正文基准：全站无小于 18px 的文字 */
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    border-top: 6px solid #de2910;
+  }
+
+  /* ---------- 大标题 ---------- */
+  header {
+    text-align: center;
+    padding: 30px 16px 22px;
+    border-bottom: 3px double #d4af37;
+    background: #ffffff;
+  }
+  h1 {
+    margin: 0;
+    font-size: 46px;
+    font-weight: bold;
+    color: #de2910;
+    letter-spacing: 12px;
+    text-indent: 12px; /* 抵消末字后间距，保证视觉居中 */
+  }
+
+  /* ---------- 计数器 ---------- */
+  .counter {
+    text-align: center;
+    font-size: 20px;
+    line-height: 1.7;
+    color: #333333;
+    margin: 6px auto;
+  }
+  .counter-num {
+    color: #de2910;
+    font-weight: bold;
+    font-size: 24px;
+  }
+
+  /* ---------- 主区域 ---------- */
+  main {
+    flex: 1;
+    width: 100%;
+    max-width: 1080px;
+    margin: 0 auto;
+    padding: 22px 20px 10px;
+  }
+  .panes {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 22px;
+    margin-top: 18px;
+  }
+  .pane { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+  .pane label {
+    text-align: center;
+    font-size: 18px;
+    font-weight: bold;
+    color: #de2910;
+    letter-spacing: 3px;
+    padding: 8px 10px;
+    border: 1px solid #d4af37;
+    border-radius: 4px;
+    background: #fff8e6;
+  }
+  textarea, #output {
+    flex: 1;
+    min-height: 320px;
+    resize: vertical;
+    border: 2px solid #d4af37;
+    border-radius: 6px;
+    background: #ffffff;
+    padding: 14px 16px;
+    font-size: 18px;
+    line-height: 1.9;
+    white-space: pre-wrap;
+    word-break: break-word;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  }
+  /* 输入框：等宽字体、字号略小，与输出区衬线正文形成对照 */
+  textarea {
+    font-family: ui-monospace, "Cascadia Mono", Consolas, "Courier New", monospace;
+    font-size: 16px;
+  }
+  #output { font-family: inherit; }
+  textarea:focus { outline: none; border-color: #de2910; box-shadow: 0 0 0 3px rgba(222, 41, 16, 0.12); }
+
+  /* ---------- 大按钮 ---------- */
+  .button-row { text-align: center; margin-top: 26px; }
+  #btn-translate {
+    font-family: inherit;
+    font-size: 22px;
+    font-weight: bold;
+    color: #ffffff;
+    background: #de2910;
+    border: 2px solid #d4af37;
+    border-radius: 8px;
+    padding: 14px 56px;
+    letter-spacing: 6px;
+    cursor: pointer;
+    transition: transform 0.15s ease, background 0.2s ease;
+    animation: btn-glow 3.2s ease-in-out 1.4s infinite;
+  }
+  #btn-translate:hover { background: #b3240d; transform: translateY(-2px); }
+  #btn-translate:active { transform: translateY(1px) scale(0.97); }
+
+  /* ---------- 未命中提示 ---------- */
+  #hint {
+    text-align: center;
+    font-size: 18px;
+    color: #8a3a2a;
+    margin: 14px auto 0;
+  }
+  #hint[hidden] { display: none; }
+  #hint a { color: #de2910; font-weight: bold; }
+
+  /* ---------- terms.js 缺失提示 ---------- */
+  #missing-warning {
+    text-align: center;
+    font-size: 18px;
+    color: #a3160a;
+    background: #ffe9e5;
+    border-bottom: 1px solid #de2910;
+    padding: 10px 16px;
+  }
+  #missing-warning[hidden] { display: none; }
+
+  /* ---------- 底部声明 ---------- */
+  footer {
+    margin-top: 34px;
+    padding: 20px 16px;
+    text-align: center;
+    font-size: 18px;
+    color: #333333;
+    border-top: 3px double #d4af37;
+    background: #ffffff;
+  }
+  footer p { margin: 6px 0; }
+
+  /* ---------- 悬浮公告 ---------- */
+  #announce-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 100;
+    background: rgba(0, 0, 0, 0.55);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+    animation: fade-in 0.3s ease-out both;
+  }
+  #announce-overlay[hidden] { display: none; }
+  #announce-overlay.closing { animation: fade-out 0.25s ease-in both; }
+  #announce-card {
+    background: #ffffff;
+    border: 3px solid #d4af37;
+    border-radius: 8px;
+    max-width: 680px;
+    width: 100%;
+    max-height: 85vh;
+    overflow-y: auto;
+    padding: 26px 30px;
+    box-shadow: 0 6px 30px rgba(0, 0, 0, 0.35);
+    animation: card-pop 0.38s cubic-bezier(0.2, 0.9, 0.3, 1.15) both;
+  }
+  #announce-overlay.closing #announce-card { animation: card-pop-out 0.25s ease-in both; }
+  #announce-card h2 {
+    margin: 0 0 14px;
+    font-size: 24px;
+    color: #de2910;
+    line-height: 1.5;
+  }
+  #announce-card blockquote {
+    margin: 14px 0;
+    padding: 12px 16px;
+    border-left: 4px solid #d4af37;
+    background: #fff8e6;
+  }
+  #announce-card blockquote p { margin: 0; font-size: 18px; line-height: 1.9; }
+  #announce-card p { margin: 12px 0; font-size: 18px; line-height: 1.9; }
+  #announce-card a { color: #de2910; }
+  #announce-close {
+    display: block;
+    width: 100%;
+    margin-top: 20px;
+    font-family: inherit;
+    font-size: 20px;
+    font-weight: bold;
+    color: #ffffff;
+    background: #de2910;
+    border: 2px solid #d4af37;
+    border-radius: 6px;
+    padding: 10px 0;
+    letter-spacing: 6px;
+    cursor: pointer;
+    transition: background 0.2s ease, transform 0.15s ease;
+  }
+  #announce-close:hover { background: #b3240d; transform: translateY(-1px); }
+
+  /* ---------- 动效（只用 transform/opacity，合成层完成，低性能设备无压力） ---------- */
+  @keyframes fade-slide-down { from { opacity: 0; transform: translateY(-16px); } to { opacity: 1; transform: translateY(0); } }
+  @keyframes fade-rise { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: translateY(0); } }
+  @keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
+  @keyframes fade-out { from { opacity: 1; } to { opacity: 0; } }
+  @keyframes card-pop { from { opacity: 0; transform: scale(0.92) translateY(12px); } to { opacity: 1; transform: scale(1) translateY(0); } }
+  @keyframes card-pop-out { from { opacity: 1; transform: scale(1); } to { opacity: 0; transform: scale(0.94) translateY(10px); } }
+  @keyframes num-pop { from { transform: scale(1.4); opacity: 0.2; } to { transform: scale(1); opacity: 1; } }
+  @keyframes btn-glow { 0%, 100% { box-shadow: 0 0 0 0 rgba(212, 175, 55, 0); } 50% { box-shadow: 0 0 22px 4px rgba(212, 175, 55, 0.55); } }
+
+  /* 入场：标题下沉、计数器淡入、两栏依次升起、按钮最后到位 */
+  header { animation: fade-slide-down 0.6s ease-out both; }
+  .counter:nth-of-type(1) { animation: fade-in 0.6s ease-out 0.15s both; }
+  .counter:nth-of-type(2) { animation: fade-in 0.6s ease-out 0.3s both; }
+  .pane:nth-child(1) { animation: fade-rise 0.55s ease-out 0.2s both; }
+  .pane:nth-child(2) { animation: fade-rise 0.55s ease-out 0.35s both; }
+  .button-row { animation: fade-rise 0.55s ease-out 0.5s both; }
+
+  /* 翻译结果与计数数字更新时的轻量反馈 */
+  #output.flash { animation: fade-rise 0.45s ease-out; }
+  .counter-num.updated { display: inline-block; animation: num-pop 0.4s ease-out; }
+
+  /* 低性能/减动效偏好：关闭全部动画与过渡 */
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation: none !important; transition: none !important; }
+  }
+
+  /* ---------- 移动端（<768px）：两栏上下堆叠、按钮全宽 ---------- */
+  @media (max-width: 767px) {
+    h1 { font-size: 34px; letter-spacing: 6px; text-indent: 6px; }
+    main { padding: 16px 14px 8px; }
+    .panes { grid-template-columns: 1fr; }
+    textarea, #output { min-height: 220px; }
+    #btn-translate { width: 100%; letter-spacing: 4px; }
+    #announce-card { padding: 20px 18px; }
+  }
+</style>
+</head>
+<body>
+  <div id="missing-warning" hidden>请先运行 python3 build_web_dict.py</div>
+
+  <header>
+    <h1>话语权掌握器</h1>
+  </header>
+
+  <main>
+    <p class="counter">已掌握话语权人数：<span id="busuanzi_value_site_uv" class="counter-num"></span></p>
+    <p class="counter">技术突破与文化自信双向赋能次数：<span id="counter-translations" class="counter-num">0</span></p>
+
+    <div class="panes">
+      <section class="pane">
+        <label for="input">未被掌握的话语权</label>
+        <textarea id="input" placeholder="粘贴中英混合文本，点击下方按钮后为您双向赋能…"></textarea>
+      </section>
+      <section class="pane">
+        <label for="output">双向赋能话语权</label>
+        <div id="output"></div>
+      </section>
+    </div>
+
+    <div class="button-row">
+      <button id="btn-translate">点击掌握话语权</button>
+    </div>
+
+    <p id="hint" hidden>尚有词汇未被掌握，可提交后台赋能：<a id="hint-link" href="#" target="_blank" rel="noopener">提交翻译请求</a></p>
+  </main>
+
+  <footer>
+    <p>此项目使用深度求索第四代闪光型号以及月之暗面第三代大模型在派编码鞍具上完成编码并托管到代码枢纽行动上</p>
+    <p>本人热爱祖国，热爱人民，此项目只为增强文化自信，赋能科技与文化自信共同进步</p>
+  </footer>
+
+  <!-- 悬浮公告：打开页面即显示，点击「已阅」关闭 -->
+  <div id="announce-overlay" hidden>
+    <div id="announce-card" role="dialog" aria-label="公告">
+      <div id="announce-body"></div>
+      <button id="announce-close">已阅</button>
+    </div>
+  </div>
+
+<script src="//busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"
+        onerror="document.getElementById('busuanzi_value_site_uv').textContent='统计中'"></script>
+<script>
+(function () {
+  'use strict';
+
+  // ---------- 词典 ----------
+  var TERMS = window.TERMS || {};
+  var dict = {}; // 会话词典：小写 key → 中文译名
+  var hasSeed = false;
+  for (var k in TERMS) {
+    if (Object.prototype.hasOwnProperty.call(TERMS, k)) {
+      dict[k.toLowerCase()] = TERMS[k];
+      hasSeed = true;
+    }
+  }
+  if (!hasSeed) {
+    document.getElementById('missing-warning').hidden = false;
+  }
+
+  // ---------- 切分与最长匹配（与 DESIGN.md / translate.py 一致，勿改） ----------
+  var SEG_RE = /[A-Za-z0-9]+(?:[ \t.+#_-][A-Za-z0-9]+)*/g;
+
+  // 词边界检查：key 首尾若为字母/数字，相邻字符不得再是字母/数字
+  // （防止常见短词切碎专有名词，如 ai 不再切碎 chain、son 不再切碎 Sonnet）
+  function isAlnum(ch) { return /[A-Za-z0-9]/.test(ch); }
+
+  // 在段内位置 p 找最长的词典命中（前缀匹配，与 translate.py 一致）
+  function matchAt(seg, p, keys) {
+    var best = null;
+    for (var i = 0; i < keys.length; i++) {
+      var key = keys[i];
+      var len = key.length;
+      if (p + len > seg.length) continue;
+      if (seg.substr(p, len).toLowerCase() !== key) continue;
+      if (isAlnum(key[0]) && p > 0 && isAlnum(seg[p - 1])) continue;
+      if (isAlnum(key[len - 1]) && p + len < seg.length && isAlnum(seg[p + len])) continue;
+      if (!best || len > best.len) best = { key: key, len: len };
+    }
+    return best;
+  }
+
+  // 整段未命中时：段内从左到右最长匹配切分（词典合查）
+  // 返回 { matched: [{start,end,key}], unknownRuns: [{start,end,term}] }
+  function segmentPlan(seg) {
+    var keys = Object.keys(dict);
+    var matched = [];
+    var p = 0, n = seg.length;
+    while (p < n) {
+      var m = matchAt(seg, p, keys);
+      if (m) { matched.push({ start: p, end: p + m.len, key: m.key }); p += m.len; }
+      else p++;
+    }
+    // 匹配之间的空隙：先整段查词典（如已缓存的残余词条），再收为未知词。
+    // 残余原样保留（含边缘空白）。
+    var unknownRuns = [];
+    var pos = 0, idx = 0;
+    while (pos < n) {
+      var next = idx < matched.length ? matched[idx].start : n;
+      if (pos < next) {
+        var term = seg.slice(pos, next);
+        var low = term.trim().toLowerCase();
+        if (low && dict[low] !== undefined) matched.push({ start: pos, end: next, key: low });
+        else if (low) unknownRuns.push({ start: pos, end: next, term: term });
+      }
+      if (idx < matched.length) { pos = matched[idx].end; idx++; }
+      else pos = n;
+    }
+    return { matched: matched, unknownRuns: unknownRuns };
+  }
+
+  // 整段切分：返回 { pieces: [{start,end,text}], unknowns: [{start,end,term}] }
+  function buildPlan(text) {
+    SEG_RE.lastIndex = 0;
+    var pieces = [], unknowns = [];
+    var m;
+    while ((m = SEG_RE.exec(text)) !== null) {
+      var s = m.index, e = s + m[0].length;
+      var seg = m[0];
+      var key = seg.toLowerCase();
+      if (dict[key] !== undefined) {
+        pieces.push({ start: s, end: e, text: dict[key] });
+        continue;
+      }
+      var plan = segmentPlan(seg);
+      for (var i = 0; i < plan.matched.length; i++) {
+        var mt = plan.matched[i];
+        pieces.push({ start: s + mt.start, end: s + mt.end, text: dict[mt.key] });
+      }
+      for (var j = 0; j < plan.unknownRuns.length; j++) {
+        var u = plan.unknownRuns[j];
+        unknowns.push({ start: s + u.start, end: s + u.end, term: u.term });
+      }
+    }
+    return { pieces: pieces, unknowns: unknowns };
+  }
+
+  // 原位回填：译名替换对应区间，不加任何空格，其余字符原封不动
+  function renderOutput(text, plan, llmMap) {
+    llmMap = llmMap || {};
+    var items = plan.pieces.slice();
+    for (var i = 0; i < plan.unknowns.length; i++) {
+      var u = plan.unknowns[i];
+      items.push({ start: u.start, end: u.end, unknown: u.term });
+    }
+    items.sort(function (a, b) { return a.start - b.start; });
+    var out = '';
+    var pos = 0;
+    for (var j = 0; j < items.length; j++) {
+      var it = items[j];
+      if (it.start > pos) out += text.slice(pos, it.start);
+      if (it.unknown !== undefined) {
+        var low = it.unknown.trim().toLowerCase();
+        out += (llmMap[low] !== undefined) ? llmMap[low] : it.unknown;
+      } else {
+        out += it.text;
+      }
+      pos = it.end;
+    }
+    out += text.slice(pos);
+    return out;
+  }
+
+  function pendingTerms(plan) {
+    var seen = {}, out = [];
+    for (var i = 0; i < plan.unknowns.length; i++) {
+      var t = plan.unknowns[i].term.trim();
+      if (!t) continue;
+      var low = t.toLowerCase();
+      if (seen[low]) continue;
+      seen[low] = true;
+      out.push(t);
+    }
+    return out;
+  }
+
+  // ---------- 翻译：仅点击按钮触发 ----------
+  var inputEl = document.getElementById('input');
+  var outputEl = document.getElementById('output');
+  var hintEl = document.getElementById('hint');
+  var hintLink = document.getElementById('hint-link');
+
+  // 提交翻译请求的 GitHub 链接模板。
+  // 注意：OWNER/REPO 为占位符，部署时请替换为真实仓库地址。
+  var ISSUE_BASE = 'https://github.com/OWNER/REPO/issues/new?title=翻译请求&body=';
+
+  // 翻译结果更新时重放淡入动效（移除类→强制重排→加回类）
+  function flashOutput() {
+    outputEl.classList.remove('flash');
+    void outputEl.offsetWidth;
+    outputEl.classList.add('flash');
+  }
+
+  document.getElementById('btn-translate').addEventListener('click', function () {
+    var text = inputEl.value;
+    if (!text.trim()) {
+      outputEl.textContent = '请先输入尚未掌握的话语权';
+      hintEl.hidden = true;
+      flashOutput();
+      return;
+    }
+    // 先本地词典离线翻译并立即显示
+    var plan = buildPlan(text);
+    outputEl.textContent = renderOutput(text, plan, {});
+    flashOutput();
+    var pending = pendingTerms(plan);
+    if (pending.length) {
+      // 有未命中词：显示提示，链接预填原文（URL 编码）供提交后台赋能
+      hintLink.href = ISSUE_BASE + encodeURIComponent(text);
+      hintEl.hidden = false;
+    } else {
+      hintEl.hidden = true;
+    }
+  });
+
+  // ---------- 计数器（动态更新） ----------
+  // 已掌握话语权人数：busuanzi 站点 UV，每 60 秒重拉一次保持新鲜；加载失败显示「统计中」
+  var uvEl = document.getElementById('busuanzi_value_site_uv');
+  var uvLast = '';
+  // 数值变化时重放弹跳动效
+  new MutationObserver(function () {
+    var t = uvEl.textContent.trim();
+    if (/^[\d,]+$/.test(t) && t !== uvLast) {
+      uvLast = t;
+      uvEl.classList.remove('updated');
+      void uvEl.offsetWidth;
+      uvEl.classList.add('updated');
+    }
+  }).observe(uvEl, { childList: true, characterData: true, subtree: true });
+  var uvStart = Date.now();
+  (function pollUV() {
+    if (uvEl.textContent.trim() !== '') return;       // 已取到数值
+    if (Date.now() - uvStart > 10000) { uvEl.textContent = '统计中'; return; }
+    setTimeout(pollUV, 500);
+  })();
+  setInterval(function () {                            // 每 60 秒重新拉取
+    var s = document.createElement('script');
+    s.async = true;
+    s.src = '//busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js?r=' + Date.now();
+    document.body.appendChild(s);
+  }, 60000);
+
+  // 技术突破与文化自信双向赋能次数：与 GitHub Action 联动——后台工作流累加 counters.json，
+  // 前端每 30 秒轮询一次动态更新（数值变化时重放弹跳动效）
+  var cntEl = document.getElementById('counter-translations');
+  var cntLast = null;
+  function pollTranslations() {
+    fetch('counters.json', { cache: 'no-store' })
+      .then(function (res) { if (!res.ok) throw new Error('HTTP ' + res.status); return res.json(); })
+      .then(function (data) {
+        var v = data && data.translations;
+        v = (typeof v === 'number' && v >= 0) ? v : 0;
+        if (v !== cntLast) {
+          cntLast = v;
+          cntEl.textContent = v;
+          cntEl.classList.remove('updated');
+          void cntEl.offsetWidth;
+          cntEl.classList.add('updated');
+        }
+      })
+      .catch(function () { if (cntLast === null) { cntLast = 0; cntEl.textContent = 0; } });
+  }
+  pollTranslations();
+  setInterval(pollTranslations, 30000);
+
+  // ---------- 悬浮公告（自写迷你 md 渲染器） ----------
+  // 公告原文，一字不改
+  var NOTICE_MD = [
+    '## 人民锐评：用“Token”还是“词元”，事关科技话语权',
+    '',
+    '> 术语是科技叙事的基础单元，若核心概念的定义权、阐释权始终掌握在他人手中，中国特色科技话语体系便无从建立。这种认知层面的依附，比技术差距更隐蔽，也更影响我国科技自立自强的长远发展。',
+    '',
+    '> 语言为科技载道，文化为发展立根。唯有筑牢母语根基、掌握话语主动权，我们才能在全球科技竞争中，实现技术突破与文化自信的双向赋能，助力科技强国建设行稳致远。',
+    '',
+    '—— [人民网·观点频道，2026年8月5日](http://opinion.people.com.cn/n1/2026/0805/c436867-40774551.html)'
+  ].join('\n');
+
+  // 行内格式：**粗体** 与 [文字](url)
+  function inlineMd(s) {
+    return s
+      .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+      .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>');
+  }
+
+  // 块级：## 标题、> 引用、段落
+  function renderMd(md) {
+    var lines = md.split('\n');
+    var html = '';
+    var i = 0;
+    while (i < lines.length) {
+      var line = lines[i];
+      if (/^##\s+/.test(line)) {
+        html += '<h2>' + inlineMd(line.replace(/^##\s+/, '')) + '</h2>';
+        i++;
+      } else if (/^>\s?/.test(line)) {
+        var quotes = [];
+        while (i < lines.length && /^>\s?/.test(lines[i])) {
+          quotes.push(lines[i].replace(/^>\s?/, ''));
+          i++;
+        }
+        html += '<blockquote>' + quotes.map(function (q) {
+          return '<p>' + inlineMd(q) + '</p>';
+        }).join('') + '</blockquote>';
+      } else if (line.trim() === '') {
+        i++;
+      } else {
+        var paras = [];
+        while (i < lines.length && lines[i].trim() !== ''
+               && !/^##\s+/.test(lines[i]) && !/^>\s?/.test(lines[i])) {
+          paras.push(lines[i]);
+          i++;
+        }
+        html += '<p>' + inlineMd(paras.join('<br>')) + '</p>';
+      }
+    }
+    return html;
+  }
+
+  var overlay = document.getElementById('announce-overlay');
+  document.getElementById('announce-body').innerHTML = renderMd(NOTICE_MD);
+  overlay.hidden = false; // 打开页面即显示
+  document.getElementById('announce-close').addEventListener('click', function () {
+    overlay.classList.add('closing'); // 播放淡出/缩小动效后再隐藏
+    setTimeout(function () { overlay.hidden = true; }, 240);
+  });
+})();
+</script>
+</body>
+</html>
