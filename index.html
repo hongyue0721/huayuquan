@@ -38,7 +38,7 @@
   /* ---------- 计数器 ---------- */
   .counter {
     text-align: center;
-    font-size: 20px;
+    font-size: 15px;
     line-height: 1.7;
     color: #333333;
     margin: 6px auto;
@@ -46,7 +46,7 @@
   .counter-num {
     color: #de2910;
     font-weight: bold;
-    font-size: 24px;
+    font-size: 17px;
   }
 
   /* ---------- 主区域 ---------- */
@@ -77,7 +77,7 @@
   }
   textarea, #output {
     flex: 1;
-    min-height: 320px;
+    min-height: 240px;
     resize: vertical;
     border: 2px solid #d4af37;
     border-radius: 6px;
@@ -181,7 +181,7 @@
     background: #ffffff;
   }
   footer p { margin: 6px 0; }
-  /* 页脚第二行（个人声明）字号刻意调小，与第一行形成层级对照 */
+  /* 页脚两行均调小至 13px：第一行项目说明、第二行个人声明，层级一致 */
   footer p.footer-sub { font-size: 13px; }
 
   /* ---------- 右上角固定按钮（重读公告 / 代码枢纽，层级低于公告 overlay） ---------- */
@@ -300,7 +300,7 @@
     h1 { font-size: 30px; letter-spacing: 4px; text-indent: 4px; }
     main { padding: 16px 14px 8px; }
     .panes { grid-template-columns: 1fr; }
-    textarea, #output { min-height: 220px; }
+    textarea, #output { min-height: 170px; }
     #btn-translate { width: 100%; letter-spacing: 4px; }
     #announce-card { padding: 20px 18px; }
     /* 右上角按钮缩到最小并贴边，避免遮住居中标题 */
@@ -361,7 +361,7 @@
   </main>
 
   <footer>
-    <p>此项目使用深度求索第四代闪光型号以及月之暗面第三代大模型在派编码鞍具上完成编码并托管到代码枢纽行动上</p>
+    <p class="footer-sub">此项目使用深度求索第四代闪光型号以及月之暗面第三代大模型在派编码鞍具上完成编码并托管到代码枢纽行动上</p>
     <p class="footer-sub">本人热爱祖国，热爱人民，此项目只为增强文化自信，赋能科技与文化自信共同进步</p>
   </footer>
 
@@ -739,6 +739,7 @@
     var model = modelEl.value.trim() || 'astron-code-latest';
     var result = {};
     function callOnce(chunk) {
+      bumpLocalCalls(); // 每实际发起一批 HTTP 请求（含失败重试）计一次本机实时赋能调用，并立即刷新计数显示
       return fetch(base + '/chat/completions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + key },
@@ -919,23 +920,51 @@
     document.body.appendChild(s);
   }, 60000);
 
-  // 技术突破与文化自信双向赋能次数：与 GitHub Action 联动——后台工作流累加 counters.json，
-  // 前端每 30 秒轮询一次动态更新（数值变化时重放弹跳动效）
+  // 技术突破与文化自信双向赋能次数（合计口径）：
+  //   远端 = GitHub Action 后台工作流累加 counters.json，前端每 30 秒轮询一次；
+  //   本机 = 前端实时赋能每次实际发起 LLM 调用（含失败重试）累加 localStorage（键 hyq-local-llm-calls）。
+  //   显示值 = 远端 + 本机，二者任一变化即重放弹跳动效。
   var cntEl = document.getElementById('counter-translations');
-  var cntLast = null;
+  var cntRemote = 0;  // 远端后台累计（counters.json，轮询刷新）
+  var cntLast = null; // 上一次显示的合计值，用于触发弹跳动效
+  var LOCAL_CALLS_KEY = 'hyq-local-llm-calls';
+  // 读取本机实时赋能调用计数：读不到/非法按 0
+  function readLocalCalls() {
+    try {
+      var n = parseInt(localStorage.getItem(LOCAL_CALLS_KEY), 10);
+      return (typeof n === 'number' && n >= 0) ? n : 0;
+    } catch (e) { return 0; }
+  }
+  var cntLocal = readLocalCalls(); // 本机实时赋能累计：以 localStorage 为持久层，内存缓存供显示
+  // 写穿持久化：隐私模式等写入失败时静默忽略（仅影响下次打开页面的初始值，不影响本次显示）
+  function writeLocalCalls() {
+    try { localStorage.setItem(LOCAL_CALLS_KEY, String(cntLocal)); } catch (e) { /* 忽略 */ }
+  }
+  // 统一刷新计数显示：合计 = 远端后台累计 + 本机实时赋能累计
+  function renderCounter() {
+    var total = cntRemote + cntLocal;
+    if (total !== cntLast) {
+      cntLast = total;
+      cntEl.textContent = total;
+      cntEl.classList.remove('updated');
+      void cntEl.offsetWidth;
+      cntEl.classList.add('updated');
+    }
+  }
+  // 本机实时赋能每发起一次 LLM 调用：计数 +1 并立即刷新显示（由 llmTranslate 挂钩调用）
+  function bumpLocalCalls() {
+    cntLocal += 1;
+    writeLocalCalls();
+    renderCounter();
+  }
   function pollTranslations() {
     fetch('counters.json', { cache: 'no-store' })
       .then(function (res) { if (!res.ok) throw new Error('HTTP ' + res.status); return res.json(); })
       .then(function (data) {
         var v = data && data.translations;
         v = (typeof v === 'number' && v >= 0) ? v : 0;
-        if (v !== cntLast) {
-          cntLast = v;
-          cntEl.textContent = v;
-          cntEl.classList.remove('updated');
-          void cntEl.offsetWidth;
-          cntEl.classList.add('updated');
-        }
+        cntRemote = v;
+        renderCounter();
       })
       .catch(function () { if (cntLast === null) { cntLast = 0; cntEl.textContent = 0; } });
   }
