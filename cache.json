@@ -18,5 +18,9 @@
   "sandboxed": "沙盒化",
   "runtime": "运行时",
   "observability": "可观测性",
-  "rollback": "回滚"
+  "rollback": "回滚",
+  "chatbot": "聊天机器人",
+  "leveraged": "杠杆化的",
+  "embeddings": "嵌入",
+  "retrieval": "检索"
 }
