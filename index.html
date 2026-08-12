@@ -337,7 +337,7 @@
       <button id="btn-translate">点击掌握话语权</button>
     </div>
 
-    <p id="hint" hidden>尚有词汇未被掌握，可提交后台赋能：<a id="hint-link" href="#" target="_blank" rel="noopener">提交翻译请求</a></p>
+    <p id="hint" hidden>尚有话语权未被掌握，可提交后台赋能：<a id="hint-link" href="#" target="_blank" rel="noopener">提交翻译请求</a></p>
     <p id="byok-status" hidden></p>
 
     <!-- 译后评价：翻译成功完成后展示，一译一票，不跨次累加 -->
@@ -401,6 +401,12 @@
 
   // ---------- 切分与最长匹配（与 设计.md / 翻译.py 一致，勿改） ----------
   var 英文段正则 = /[A-Za-z0-9]+(?:[ \t.+#_-][A-Za-z0-9]+)*/g;
+
+  // ---------- 其他语言检测（与 翻译.py 一致）：假名/谚文/西里尔/阿拉伯/天城/泰文/拉丁扩展 ----------
+  // 存在即视为"非中文非英文"输入，整篇赋能；日文汉字与中文共用字符，本地无法区分，
+  // 但日文句子几乎都带假名，够用；不带假名的纯汉字孤词漏检可接受。
+  var 其他语言正则 = /[\u3040-\u30FF\uAC00-\uD7AF\u3130-\u318F\u0400-\u052F\u0600-\u06FF\u0900-\u097F\u0E00-\u0E7F\u00C0-\u00D6\u00D8-\u00F6\u00F8-\u024F\u1E00-\u1EFF]/;
+  function 含其他语言(文本) { 其他语言正则.lastIndex = 0; return 其他语言正则.test(文本); }
 
   // 词边界检查：key 首尾若为字母/数字，相邻字符不得再是字母/数字
   // （防止常见短词切碎专有名词，如 ai 不再切碎 chain、son 不再切碎 Sonnet）
@@ -719,6 +725,18 @@
     'Copilot → 大战代码'
   ].join('\n');
 
+  // 全语言整篇赋能提示词：与 大语言模型.py 的 整篇系统提示 一致（官方定名 / 直译腔）
+  var 全语言系统提示 = [
+    '你是"话语权翻译机"的全语言翻译引擎，把任何非中文语言整段翻译成"官方定名 / 直译腔"中文。规则：',
+    '1. 延续术语级风格：有官方定名的优先用定名（token→词元、agent→智能体）；缩写先展开全称再逐字硬翻（API→应用程序编程接口）；',
+    '2. 品牌名用官方中文名或音意译：Google→谷歌、Samsung→三星、Sony→索尼、カメラ→照相机、Windows→视窗；',
+    '3. 外来词与专名一律音意译或定名，译文不得残留任何原文（拉丁字母、假名、谚文、西里尔字母一概不得出现）；',
+    '4. 阿拉伯数字一律译为语文数字，并紧随其后用全角括号附大写数字（零壹贰叁肆伍陆柒捌玖拾）：2026→二〇二六（贰零贰陆）、11→十一（壹拾壹）、Windows 11→视窗十一（壹拾壹）；',
+    '5. 语法按源语言的语序直译腔硬翻，保持"一本正经胡说"的恶搞味，但句子必须通顺可读；',
+    '6. 文本中已有的中文部分原样保留，只翻译非中文部分；',
+    '7. 只输出译文纯文本，不解释、不加引号、不要任何标记。'
+  ].join('\n');
+
   // 从响应文本中提取第一个 JSON 对象
   function 提取对象(s) {
     if (typeof s !== 'string') return {};
@@ -778,6 +796,37 @@
     return 链.then(function () { return 结果; });
   }
 
+  // 全语言整篇赋能：整段调大语言模型输出纯文本译文，失败重试一次
+  function 整篇赋能(文本) {
+    var 请求地址 = 地址框.value.trim().replace(/\/+$/, '');
+    var 秘钥 = 钥匙框.value.trim();
+    var 模型 = 模型框.value.trim() || 'astron-code-latest';
+    function 调用一次() {
+      累加本机调用(); // 每实际发起一批 HTTP 请求（含失败重试）计一次本机实时赋能调用
+      return fetch(请求地址 + '/chat/completions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + 秘钥 },
+        body: JSON.stringify({
+          model: 模型, temperature: 0,
+          messages: [
+            { role: 'system', content: 全语言系统提示 },
+            { role: 'user', content: 文本 }
+          ]
+        })
+      }).then(function (响应) {
+        if (!响应.ok) throw new Error('HTTP ' + 响应.status);
+        return 响应.json();
+      }).then(function (响应体) {
+        var 内容 = String(响应体.choices[0].message.content || '').trim();
+        var 围栏 = 内容.match(/```(?:text|plain)?\s*([\s\S]*?)```/i);
+        if (围栏) 内容 = 围栏[1].trim();
+        if (!内容) throw new Error('空译文');
+        return 内容;
+      });
+    }
+    return 调用一次().catch(function () { return 调用一次(); });
+  }
+
   document.getElementById('btn-translate').addEventListener('click', function () {
     // 新一轮翻译：丢弃上一轮未评价的实时赋能结果，评价区重置为可投并隐藏（翻译成功后重新展示）
     待评补译结果 = null;
@@ -788,6 +837,37 @@
       输出框.textContent = '请先输入尚未掌握的话语权';
       提示条.hidden = true;
       闪动输出();
+      return;
+    }
+    if (含其他语言(文本)) {
+      // 日/韩/俄/阿等其他语言：整篇赋能（不进词典与缓存），不走术语级链路
+      if (!钥匙框.value.trim()) {
+        // 未备钥匙：走后台异步渠道（issue → GitHub Action），后端同样整篇赋能
+        提示链接.href = 建议地址 + encodeURIComponent(文本);
+        提示条.hidden = false;
+        自带钥匙状态.hidden = true;
+        return;
+      }
+      var 全语言按钮 = this;
+      var 全语言原按钮文字 = 全语言按钮.textContent;
+      全语言按钮.disabled = true;
+      全语言按钮.textContent = '全语言赋能中…';
+      自带钥匙状态.hidden = true;
+      整篇赋能(文本).then(function (译文) {
+        输出框.textContent = 译文;
+        闪动输出();
+        自带钥匙状态.textContent = '全语言赋能完成';
+        自带钥匙状态.hidden = false;
+        提示条.hidden = true; // 成功后收起上一轮残留的后台赋能提示
+      }).catch(function (错误) {
+        自带钥匙状态.textContent = '全语言赋能失败：' + 错误.message + '，可改用后台赋能';
+        自带钥匙状态.hidden = false;
+        提示链接.href = 建议地址 + encodeURIComponent(文本);
+        提示条.hidden = false;
+      }).then(function () {
+        全语言按钮.disabled = false;
+        全语言按钮.textContent = 全语言原按钮文字;
+      });
       return;
     }
     // 先本地词典离线翻译并立即显示

@@ -48,6 +48,15 @@ GPT-5.6 → 生成式预训练转换器第五点六（伍点陆）代
 Windows 11 → 视窗十一（壹拾壹）
 Copilot → 大战代码"""
 
+整篇系统提示 = """你是"话语权翻译机"的全语言翻译引擎，把任何非中文语言整段翻译成"官方定名 / 直译腔"中文。规则：
+1. 延续术语级风格：有官方定名的优先用定名（token→词元、agent→智能体）；缩写先展开全称再逐字硬翻（API→应用程序编程接口）；
+2. 品牌名用官方中文名或音意译：Google→谷歌、Samsung→三星、Sony→索尼、カメラ→照相机、Windows→视窗；
+3. 外来词与专名一律音意译或定名，译文不得残留任何原文（拉丁字母、假名、谚文、西里尔字母一概不得出现）；
+4. 阿拉伯数字一律译为语文数字，并紧随其后用全角括号附大写数字（零壹贰叁肆伍陆柒捌玖拾）：2026→二〇二六（贰零贰陆）、11→十一（壹拾壹）、Windows 11→视窗十一（壹拾壹）；
+5. 语法按源语言的语序直译腔硬翻，保持"一本正经胡说"的恶搞味，但句子必须通顺可读；
+6. 文本中已有的中文部分原样保留，只翻译非中文部分；
+7. 只输出译文纯文本，不解释、不加引号、不要任何标记。"""
+
 用户提示模板 = "请翻译以下英文术语：\n{术语}\n返回严格 JSON 对象（键为原文、值为译名）。"
 
 
@@ -91,22 +100,18 @@ def _提取首个对象(文本):
     return None
 
 
-def _发起请求(术语):
-    """单次批量调用，返回 {原词: 译名}；任何失败返回 {}。"""
+def _调用大语言模型(消息列表):
+    """通用对话补全调用：发送消息列表，返回 content 文本；任何失败返回 None。"""
     global _调用次数
     秘钥 = _取首个环境变量("HYQ_API_KEY", "DEEPSEEK_API_KEY", "OPENAI_API_KEY")
     if not 秘钥:
-        return {}
+        return None
     请求地址 = (_取首个环境变量("HYQ_BASE_URL") or 请求地址默认).rstrip("/")
     模型 = _取首个环境变量("HYQ_MODEL") or 模型默认
     请求体 = {
         "model": 模型,
         "temperature": 0,
-        "messages": [
-            {"role": "system", "content": 系统提示},
-            {"role": "user", "content": 用户提示模板.format(
-                术语=json.dumps(list(术语), ensure_ascii=False))},
-        ],
+        "messages": 消息列表,
     }
     请求 = urllib.request.Request(
         请求地址 + "/chat/completions",
@@ -119,10 +124,21 @@ def _发起请求(术语):
         _调用次数 += 1  # 实际发起 HTTP 请求（含失败与重试）
         with urllib.request.urlopen(请求, timeout=60) as 响应:
             响应体 = json.loads(响应.read().decode("utf-8"))
-        内容 = 响应体["choices"][0]["message"]["content"]
-        对象 = _提取首个对象(内容)
+        return 响应体["choices"][0]["message"]["content"]
     except Exception:
+        return None
+
+
+def _发起请求(术语):
+    """单次批量调用，返回 {原词: 译名}；任何失败返回 {}。"""
+    内容 = _调用大语言模型([
+        {"role": "system", "content": 系统提示},
+        {"role": "user", "content": 用户提示模板.format(
+            术语=json.dumps(list(术语), ensure_ascii=False))},
+    ])
+    if not 内容:
         return {}
+    对象 = _提取首个对象(内容)
     if not isinstance(对象, dict):
         return {}
     结果 = {}
@@ -130,6 +146,25 @@ def _发起请求(术语):
         if isinstance(k, str) and isinstance(v, str) and k.strip() and v.strip():
             结果[k.strip()] = v.strip()
     return 结果
+
+
+def 翻译整篇(文本):
+    """整篇翻译非中文语言为"官方定名 / 直译腔"中文；失败重试一次，再失败返回 None。"""
+    消息列表 = [
+        {"role": "system", "content": 整篇系统提示},
+        {"role": "user", "content": 文本},
+    ]
+    内容 = _调用大语言模型(消息列表)
+    if not 内容:
+        内容 = _调用大语言模型(消息列表)
+    if not 内容:
+        return None
+    内容 = 内容.strip()
+    # 去掉可能的 markdown 代码围栏
+    m = re.search(r"```(?:text|plain)?\s*(.*?)```", 内容, re.S | re.I)
+    if m:
+        内容 = m.group(1).strip()
+    return 内容 if 内容 else None
 
 
 def _译名是否洁净(值):
