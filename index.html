@@ -131,6 +131,34 @@
   #byok-status { text-align: center; font-size: 16px; color: #8a3a2a; margin: 10px 0 2px; }
   #byok-status[hidden] { display: none; }
 
+  /* ---------- 译后评价（👍/👎，票数持久化到 localStorage） ---------- */
+  #vote-area {
+    text-align: center;
+    margin: 12px 0 4px;
+  }
+  #vote-area[hidden] { display: none; }
+  #vote-prompt { font-size: 18px; color: #333333; margin: 0 0 8px; }
+  .vote-btn {
+    font-family: inherit;
+    font-size: 18px;
+    color: #ffffff;
+    background: #de2910;
+    border: 2px solid #d4af37;
+    border-radius: 6px;
+    padding: 8px 22px;
+    margin: 0 8px;
+    cursor: pointer;
+    transition: background 0.2s ease, transform 0.15s ease;
+  }
+  .vote-btn:hover { background: #b3240d; transform: translateY(-1px); }
+  .vote-btn:active { transform: translateY(1px) scale(0.97); }
+  .vote-btn[disabled] {
+    background: #8a8a8a;
+    border-color: #c9a33c;
+    cursor: default;
+    transform: none;
+  }
+
   /* ---------- terms.js 缺失提示 ---------- */
   #missing-warning {
     text-align: center;
@@ -153,6 +181,32 @@
     background: #ffffff;
   }
   footer p { margin: 6px 0; }
+  /* 页脚第二行（个人声明）字号刻意调小，与第一行形成层级对照 */
+  footer p.footer-sub { font-size: 13px; }
+
+  /* ---------- 右上角固定按钮（重读公告 / 代码枢纽，层级低于公告 overlay） ---------- */
+  .top-actions {
+    position: fixed;
+    top: 12px;
+    right: 14px;
+    z-index: 50; /* 低于 #announce-overlay 的 z-index:100，公告弹出时被遮住 */
+    display: flex;
+    gap: 8px;
+  }
+  .top-action {
+    font-family: inherit;
+    font-size: 14px;
+    color: #b3240d;
+    background: #ffffff;
+    border: 2px solid #b3240d;
+    border-radius: 6px;
+    padding: 5px 12px;
+    cursor: pointer;
+    text-decoration: none;
+    transition: background 0.2s ease, color 0.2s ease, transform 0.15s ease;
+  }
+  .top-action:hover { background: #de2910; color: #ffffff; transform: translateY(-1px); }
+  .top-action:active { transform: translateY(1px); }
 
   /* ---------- 悬浮公告 ---------- */
   #announce-overlay {
@@ -249,6 +303,11 @@
     textarea, #output { min-height: 220px; }
     #btn-translate { width: 100%; letter-spacing: 4px; }
     #announce-card { padding: 20px 18px; }
+    /* 右上角按钮缩到最小并贴边，避免遮住居中标题 */
+    .top-actions { top: 8px; right: 10px; gap: 6px; }
+    .top-action { font-size: 12px; padding: 3px 8px; }
+    /* 评价按钮收紧留白，窄屏两枚并排不溢出 */
+    .vote-btn { font-size: 16px; padding: 6px 12px; margin: 0 4px; }
   }
 </style>
 </head>
@@ -281,6 +340,15 @@
     <p id="hint" hidden>尚有词汇未被掌握，可提交后台赋能：<a id="hint-link" href="#" target="_blank" rel="noopener">提交翻译请求</a></p>
     <p id="byok-status" hidden></p>
 
+    <!-- 译后评价：翻译成功完成后展示，票数存 localStorage -->
+    <div id="vote-area" hidden>
+      <p id="vote-prompt">对此次赋能的结果评价如何？</p>
+      <div>
+        <button id="vote-up" class="vote-btn" type="button"></button>
+        <button id="vote-down" class="vote-btn" type="button"></button>
+      </div>
+    </div>
+
     <!-- 词元钥匙预置于此（隐藏设置区，访客无需看见也无需操作） -->
     <details id="byok">
       <summary>实时赋能设置</summary>
@@ -294,8 +362,14 @@
 
   <footer>
     <p>此项目使用深度求索第四代闪光型号以及月之暗面第三代大模型在派编码鞍具上完成编码并托管到代码枢纽行动上</p>
-    <p>本人热爱祖国，热爱人民，此项目只为增强文化自信，赋能科技与文化自信共同进步</p>
+    <p class="footer-sub">本人热爱祖国，热爱人民，此项目只为增强文化自信，赋能科技与文化自信共同进步</p>
   </footer>
+
+  <!-- 右上角固定按钮：重读公告 / 代码枢纽（z-index 低于公告 overlay，公告弹出时被遮住） -->
+  <div class="top-actions">
+    <button id="btn-reread" class="top-action" type="button">重读公告</button>
+    <a class="top-action" href="https://github.com/hongyue0721/huayuquan" target="_blank" rel="noopener">代码枢纽</a>
+  </div>
 
   <!-- 悬浮公告：打开页面即显示，点击「已阅」关闭 -->
   <div id="announce-overlay" hidden>
@@ -584,6 +658,10 @@
   }
 
   document.getElementById('btn-translate').addEventListener('click', function () {
+    // 新一轮翻译：丢弃上一轮未评价的实时赋能结果，评价区重置为可投并隐藏（翻译成功后重新展示）
+    pendingLlmMap = null;
+    resetVoteArea();
+    voteAreaEl.hidden = true;
     var text = inputEl.value;
     if (!text.trim()) {
       outputEl.textContent = '请先输入尚未掌握的话语权';
@@ -596,7 +674,12 @@
     outputEl.textContent = renderOutput(text, plan, {});
     flashOutput();
     var pending = pendingTerms(plan);
-    if (!pending.length) { hintEl.hidden = true; return; }
+    if (!pending.length) {
+      hintEl.hidden = true;
+      resetVoteArea();
+      voteAreaEl.hidden = false; // 纯词典命中同样可评价，只是无缓存操作
+      return;
+    }
     if (!keyEl.value.trim()) {
       // 未备钥匙：走后台异步渠道（issue → GitHub Action）
       hintLink.href = ISSUE_BASE + encodeURIComponent(text);
@@ -610,9 +693,7 @@
     btn.textContent = '实时赋能中…';
     byokStatus.hidden = true;
     llmTranslate(pending).then(function (llmMap) {
-      for (var k in llmMap) {
-        if (Object.prototype.hasOwnProperty.call(llmMap, k)) dict[k] = llmMap[k]; // 并入会话词典
-      }
+      pendingLlmMap = llmMap; // 先存待评：仅用于本次回显，待用户 👍 后才并入会话词典
       outputEl.textContent = renderOutput(text, plan, llmMap);
       flashOutput();
       var still = pending.filter(function (t) { return llmMap[t.trim().toLowerCase()] === undefined; });
@@ -624,6 +705,8 @@
       }
       byokStatus.textContent = '实时赋能完成，新掌握词汇 ' + Object.keys(llmMap).length + ' 个';
       byokStatus.hidden = false;
+      resetVoteArea();
+      voteAreaEl.hidden = false; // 翻译成功：展示译后评价区
     }).catch(function (err) {
       byokStatus.textContent = '实时赋能失败：' + err.message + '，可改用后台赋能';
       byokStatus.hidden = false;
@@ -634,6 +717,80 @@
       btn.textContent = oldText;
     });
   });
+
+  // ---------- 译后评价（👍/👎） ----------
+  // 累计票数存 localStorage（key 如 hyq-vote-up / hyq-vote-down），读不到按 0
+  var VOTE_UP_LS = 'hyq-vote-up';
+  var VOTE_DOWN_LS = 'hyq-vote-down';
+  var pendingLlmMap = null; // 实时赋能结果：待用户评价后决定是否并入会话词典（不评价则丢弃）
+  var voted = false;        // 同一次翻译内是否已投票（只能投一票）
+  var voteAreaEl = document.getElementById('vote-area');
+  var votePromptEl = document.getElementById('vote-prompt');
+  var voteUpBtn = document.getElementById('vote-up');
+  var voteDownBtn = document.getElementById('vote-down');
+
+  function readVote(lsKey) {
+    try {
+      var n = parseInt(localStorage.getItem(lsKey), 10);
+      return (typeof n === 'number' && !isNaN(n) && n > 0) ? n : 0;
+    } catch (e) { return 0; }
+  }
+
+  function writeVote(lsKey, n) {
+    try { localStorage.setItem(lsKey, String(n)); } catch (e) { /* 忽略 */ }
+  }
+
+  // 按钮上实时展示累计票数
+  function renderVoteCounts() {
+    voteUpBtn.textContent = '👍 赞同 ' + readVote(VOTE_UP_LS);
+    voteDownBtn.textContent = '👎 不赞同 ' + readVote(VOTE_DOWN_LS);
+  }
+
+  // 重置为可投状态（每次翻译完成、以及页面初始化时调用）
+  function resetVoteArea() {
+    voted = false;
+    votePromptEl.textContent = '对此次赋能的结果评价如何？';
+    voteUpBtn.disabled = false;
+    voteDownBtn.disabled = false;
+    renderVoteCounts();
+  }
+
+  // 👍：并入会话词典（真正命中缓存）；👎：丢弃本次新词，不写入缓存
+  function submitVote(up) {
+    if (voted) return; // 同一次翻译内只能投一票
+    voted = true;
+    writeVote(up ? VOTE_UP_LS : VOTE_DOWN_LS, readVote(up ? VOTE_UP_LS : VOTE_DOWN_LS) + 1);
+    renderVoteCounts();
+    voteUpBtn.disabled = true;
+    voteDownBtn.disabled = true;
+    var cnt = pendingLlmMap ? Object.keys(pendingLlmMap).length : 0;
+    if (up) {
+      votePromptEl.textContent = '已收到您的评价，感谢认可！';
+      if (pendingLlmMap) {
+        for (var k in pendingLlmMap) {
+          if (Object.prototype.hasOwnProperty.call(pendingLlmMap, k)) dict[k] = pendingLlmMap[k];
+        }
+        if (cnt > 0) {
+          byokStatus.textContent = '已收到好评，本次实时赋能成果已写入缓存，新掌握词汇 ' + cnt + ' 个';
+          byokStatus.hidden = false;
+        }
+        pendingLlmMap = null;
+      }
+    } else {
+      votePromptEl.textContent = '已收到您的评价，感谢反馈！';
+      if (pendingLlmMap) {
+        if (cnt > 0) {
+          byokStatus.textContent = '已收到差评，本次新词未写入缓存';
+          byokStatus.hidden = false;
+        }
+        pendingLlmMap = null;
+      }
+    }
+  }
+
+  voteUpBtn.addEventListener('click', function () { submitVote(true); });
+  voteDownBtn.addEventListener('click', function () { submitVote(false); });
+  resetVoteArea(); // 初始化：按 localStorage 累计票数渲染两个按钮
 
   // ---------- 计数器（动态更新） ----------
   // 已掌握话语权人数：busuanzi 站点 UV，每 60 秒重拉一次保持新鲜；加载失败显示「统计中」
@@ -741,9 +898,16 @@
   var overlay = document.getElementById('announce-overlay');
   document.getElementById('announce-body').innerHTML = renderMd(NOTICE_MD);
   overlay.hidden = false; // 打开页面即显示
+  var closeTimer = null;
   document.getElementById('announce-close').addEventListener('click', function () {
     overlay.classList.add('closing'); // 播放淡出/缩小动效后再隐藏
-    setTimeout(function () { overlay.hidden = true; }, 240);
+    closeTimer = setTimeout(function () { overlay.hidden = true; }, 240);
+  });
+  // 右上角「重读公告」：复用现有公告 DOM，取消隐藏并去掉 closing 类即可重新展示
+  document.getElementById('btn-reread').addEventListener('click', function () {
+    if (closeTimer) { clearTimeout(closeTimer); closeTimer = null; }
+    overlay.classList.remove('closing');
+    overlay.hidden = false;
   });
 })();
 </script>
