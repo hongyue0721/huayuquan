@@ -124,7 +124,7 @@ alias 使别名=alias;
 
 ### （四）词库呈批（贡献渠道）
 
-为广纳贤言，本设备开通「词库呈批」渠道：凡有佳译，皆可于[呈批专窗](https://github.com/hongyue0721/huayuquan/issues/new?template=%E8%AF%8D%E5%BA%93%E5%91%88%E6%89%B9.md)依格式呈报词条之增删，机器人自动校验并批复；格式合规者收录于贡献词库（`terms/contrib.json`）并自动转呈拉取请求，候站长御批，合并后随词典重建即刻生效。
+为广纳贤言，本设备开通「词库呈批」渠道：凡有佳译，皆可于[呈批专窗](https://github.com/hongyue0721/huayuquan/issues/new?template=%E8%AF%8D%E5%BA%93%E5%91%88%E6%89%B9.md)依格式呈报词条之增删，机器人自动校验并批复；格式合规者收录于贡献词库（`terms/contrib.json`），自动转呈拉取请求并由机器人代为御批，随词典重建即刻生效。
 
 呈批格式（每行一条）：
 
