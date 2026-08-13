@@ -870,7 +870,7 @@ window.词库 = {
   "view": "视图",
   "visit": "访问",
   "visual studio code": "可视化工作室代码",
-  "vs": "大战\\n",
+  "vs": "大战",
   "vscode": "可视化工作室代码",
   "want": "想要",
   "war": "战争",
