@@ -12,6 +12,8 @@ permissions:
 jobs:
   empower:
     runs-on: ubuntu-latest
+    # 词库呈批类 issue 由 petition.yml 专管，本工作流回避，以免双车同道、争改 词库.js 致拉取请求冲突
+    if: github.event_name != 'issues' || !startsWith(github.event.issue.title, '【词库呈批】')
     steps:
       - name: 检出仓库
         uses: actions/checkout@v4
