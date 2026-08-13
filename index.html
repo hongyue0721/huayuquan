@@ -303,9 +303,9 @@
     textarea, #output { min-height: 170px; }
     #btn-translate { width: 100%; letter-spacing: 4px; }
     #announce-card { padding: 20px 18px; }
-    /* 右上角按钮缩到最小并贴边，避免遮住居中标题 */
+    /* 右上角按钮缩到最小并贴边，避免遮住居中标题（现为三个按钮，内边距略收紧） */
     .top-actions { top: 8px; right: 10px; gap: 6px; }
-    .top-action { font-size: 12px; padding: 3px 8px; }
+    .top-action { font-size: 12px; padding: 3px 6px; }
     /* 评价按钮收紧留白，窄屏两枚并排不溢出 */
     .vote-btn { font-size: 16px; padding: 6px 12px; margin: 0 4px; }
   }
@@ -365,9 +365,10 @@
     <p class="footer-sub">本人热爱祖国，热爱人民，此项目只为增强文化自信，赋能科技与文化自信共同进步</p>
   </footer>
 
-  <!-- 右上角固定按钮：重读公告 / 代码枢纽（z-index 低于公告 overlay，公告弹出时被遮住） -->
+  <!-- 右上角固定按钮：重读公告 / 贡献赋能词汇 / 代码枢纽（z-index 低于公告 overlay，公告弹出时被遮住） -->
   <div class="top-actions">
     <button id="btn-reread" class="top-action" type="button">重读公告</button>
+    <a class="top-action" href="https://github.com/hongyue0721/huayuquan/issues/new?template=%E8%AF%8D%E5%BA%93%E5%91%88%E6%89%B9.md" target="_blank" rel="noopener">贡献赋能词汇</a>
     <a class="top-action" href="https://github.com/hongyue0721/huayuquan" target="_blank" rel="noopener">代码枢纽</a>
   </div>
 
