@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """合并 terms/ 目录下全部 .json 词典与 cache.json 生成 词库.js（window.词库 = {...}）。
 
-terms/ 内按文件名排序合并（后者覆盖前者），cache.json 最后合并、优先级最高；
+terms/ 内按文件名排序合并（后者覆盖前者），惟 contrib.json（词库呈批贡献词库）殿后、
+压过内置词库；cache.json 最后合并、优先级最高；
 任一文件缺失或损坏时跳过（视为空）。key 一律转小写，与词典格式约定一致。
 """
 import json
@@ -26,7 +27,7 @@ def 主程序():
     词条 = {}
     词典目录 = os.path.join(本目录, "terms")
     if os.path.isdir(词典目录):
-        for 文件名 in sorted(os.listdir(词典目录)):  # 按文件名排序，后者覆盖前者
+        for 文件名 in sorted(os.listdir(词典目录), key=lambda f: (f == "contrib.json", f)):  # 按文件名排序，contrib.json 殿后优先
             if 文件名.endswith(".json"):
                 词条.update(读词典(os.path.join(词典目录, 文件名)))
     词条.update(读词典(os.path.join(本目录, "cache.json")))  # 缓存覆盖 terms/

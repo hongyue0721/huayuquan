@@ -129,11 +129,15 @@ def 读词典(路径):
 
 
 def 读词典目录():
-    """加载 terms/ 目录下全部 .json 词典合并（按文件名排序，后者覆盖前者）。"""
+    """加载 terms/ 目录下全部 .json 词典合并。
+
+    按文件名排序合并、后者覆盖前者，惟 contrib.json（词库呈批贡献词库）殿后，
+    以呈批译名盖过内置钦定译名（seed.json/common.json）。
+    """
     合并 = {}
     if not os.path.isdir(词汇文件):
         return 合并
-    for 文件名 in sorted(os.listdir(词汇文件)):
+    for 文件名 in sorted(os.listdir(词汇文件), key=lambda f: (f == "contrib.json", f)):
         if 文件名.endswith(".json"):
             合并.update(读词典(话语权工具.拼接目录(词汇文件, 文件名)))
     return 合并

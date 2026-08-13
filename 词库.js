@@ -38,7 +38,7 @@ window.词库 = {
   "and": "和",
   "android": "安卓",
   "another": "另一个",
-  "anthropic": "人类学",
+  "anthropic": "安斯罗匹克",
   "any": "任何",
   "api": "应用程序编程接口",
   "api key": "应用编程接口秘钥",
