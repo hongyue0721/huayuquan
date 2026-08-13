@@ -736,6 +736,7 @@ window.词库 = {
   "social": "社交",
   "society": "社会",
   "software": "软件",
+  "sol": "太阳",
   "solar": "太阳版",
   "some": "一些",
   "something": "某物",
