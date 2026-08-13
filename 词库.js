@@ -205,7 +205,7 @@ window.词库 = {
   "different": "不同",
   "digital": "数字",
   "directory": "目录",
-  "discord": "不和",
+  "discord": "不和谐",
   "discussion": "讨论",
   "display": "显示",
   "district": "区域",
