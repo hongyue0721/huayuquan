@@ -337,7 +337,7 @@
       <button id="btn-translate">点击掌握话语权</button>
     </div>
 
-    <p id="hint" hidden>尚有话语权未被掌握，可提交后台赋能：<a id="hint-link" href="#" target="_blank" rel="noopener">提交翻译请求</a></p>
+    <p id="hint" hidden>尚有话语权未被掌握，可呈报新词以充实词库：<a id="hint-link" href="https://github.com/hongyue0721/huayuquan/issues/new?template=%E8%AF%8D%E5%BA%93%E5%91%88%E6%89%B9.md" target="_blank" rel="noopener">贡献赋能词汇</a></p>
     <p id="byok-status" hidden></p>
 
     <!-- 译后评价：翻译成功完成后展示，一译一票，不跨次累加 -->
@@ -615,10 +615,6 @@
   var 输入框 = document.getElementById('input');
   var 输出框 = document.getElementById('output');
   var 提示条 = document.getElementById('hint');
-  var 提示链接 = document.getElementById('hint-link');
-
-  // 提交翻译请求的 GitHub 链接（部署仓库：hongyue0721/huayuquan）
-  var 建议地址 = 'https://github.com/hongyue0721/huayuquan/issues/new?title=翻译请求&body=';
 
   // 翻译结果更新时重放淡入动效（移除类→强制重排→加回类）
   function 闪动输出() {
@@ -843,8 +839,7 @@
     if (含其他语言(文本)) {
       // 日/韩/俄/阿等其他语言：整篇赋能（不进词典与缓存），不走术语级链路
       if (!钥匙框.value.trim()) {
-        // 未备钥匙：走后台异步渠道（issue → GitHub Action），后端同样整篇赋能
-        提示链接.href = 建议地址 + encodeURIComponent(文本);
+        // 未备钥匙：实时整篇赋能不可用，仅提示呈报新词（后台翻译通道已裁撤）
         提示条.hidden = false;
         自带钥匙状态.hidden = true;
         return;
@@ -861,9 +856,8 @@
         自带钥匙状态.hidden = false;
         提示条.hidden = true; // 成功后收起上一轮残留的后台赋能提示
       }).catch(function (错误) {
-        自带钥匙状态.textContent = '全语言赋能失败：' + 错误.message + '，可改用后台赋能';
+        自带钥匙状态.textContent = '全语言赋能失败：' + 错误.message + '，可稍后再试';
         自带钥匙状态.hidden = false;
-        提示链接.href = 建议地址 + encodeURIComponent(文本);
         提示条.hidden = false;
       }).then(function () {
         全语言按钮.disabled = false;
@@ -892,8 +886,7 @@
       return;
     }
     if (!钥匙框.value.trim()) {
-      // 未备钥匙：走后台异步渠道（issue → GitHub Action）
-      提示链接.href = 建议地址 + encodeURIComponent(文本);
+      // 未备钥匙：实时赋能不可用，仅提示呈报新词（后台翻译通道已裁撤）
       提示条.hidden = false;
       return;
     }
@@ -909,7 +902,6 @@
       闪动输出();
       var 仍未补译 = 待补译.filter(function (术语) { return 补译映射[术语.trim().toLowerCase()] === undefined; });
       if (仍未补译.length) {
-        提示链接.href = 建议地址 + encodeURIComponent(文本);
         提示条.hidden = false;
       } else {
         提示条.hidden = true;
@@ -919,9 +911,8 @@
       重置评价区();
       评价区.hidden = false; // 翻译成功：展示译后评价区
     }).catch(function (错误) {
-      自带钥匙状态.textContent = '实时赋能失败：' + 错误.message + '，可改用后台赋能';
+      自带钥匙状态.textContent = '实时赋能失败：' + 错误.message + '，可稍后再试';
       自带钥匙状态.hidden = false;
-      提示链接.href = 建议地址 + encodeURIComponent(文本);
       提示条.hidden = false;
     }).then(function () {
       按钮.disabled = false;
