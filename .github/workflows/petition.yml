@@ -1,0 +1,81 @@
+name: 词库呈批批复
+
+on:
+  issues:
+    types: [opened, edited]
+
+permissions:
+  issues: write
+  contents: write
+  pull-requests: write
+
+jobs:
+  petition:
+    runs-on: ubuntu-latest
+    if: startsWith(github.event.issue.title, '【词库呈批】')
+    steps:
+      - name: 检出仓库
+        uses: actions/checkout@v4
+
+      - name: 将呈文正文写入临时文件
+        env:
+          # 用环境变量传递，避免 shell 注入（不直接把正文拼进命令）
+          ISSUE_BODY: ${{ github.event.issue.body }}
+        run: |
+          if [ -n "$ISSUE_BODY" ]; then
+            printf '%s\n' "$ISSUE_BODY" > /tmp/issue_body.txt
+          else
+            : > /tmp/issue_body.txt
+          fi
+
+      - name: 呈批校验（生成 呈批方案.json 与 批复.md；驳回时退出码非零）
+        id: check
+        run: |
+          if python3 词库呈批.py --校验 /tmp/issue_body.txt; then
+            echo "verdict=准予" >> "$GITHUB_OUTPUT"
+          else
+            echo "verdict=驳回" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: 驳回：回驳回公文并结束
+        if: steps.check.outputs.verdict == '驳回'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+        run: |
+          gh issue comment "$ISSUE_NUMBER" --body-file 批复.md
+
+      - name: 准予：呈报分支、重建词典、开拉取请求、回批复公文
+        if: steps.check.outputs.verdict == '准予'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+        run: |
+          set -e
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          BRANCH="petition/issue-${ISSUE_NUMBER}"
+          if git ls-remote --exit-code --heads origin "$BRANCH" >/dev/null 2>&1; then
+            # 呈文被编辑后再次呈批：拉取既有分支在其上重做，推送强追
+            git fetch origin "$BRANCH"
+            git checkout -B "$BRANCH" "origin/$BRANCH"
+            PUSH_OPT="--force-with-lease"
+          else
+            git checkout -B "$BRANCH"
+            PUSH_OPT="-u"
+          fi
+          python3 词库呈批.py --应用 呈批方案.json
+          python3 构建网页词典.py
+          git add terms/contrib.json 词库.js
+          git diff --cached --quiet || git commit -m "词库呈批：第 ${ISSUE_NUMBER} 号呈文所呈词条 [skip ci]"
+          git push "$PUSH_OPT" origin "$BRANCH"
+          # 该分支已有拉取请求则跳过创建（呈文编辑重批时复用原拉取请求）
+          PR_NUMBER=$(gh pr list --head "$BRANCH" --json number --jq '.[0].number // empty' 2>/dev/null || true)
+          if [ -z "$PR_NUMBER" ]; then
+            printf '## 词库呈批拉取请求\n\n本拉取请求依据[第 %s 号呈文](https://github.com/hongyue0721/huayuquan/issues/%s)自动呈报，收录所呈词条至 `terms/contrib.json` 并重建 `词库.js`。候站长御批。\n' "$ISSUE_NUMBER" "$ISSUE_NUMBER" > /tmp/pr_body.txt
+            gh pr create --base master --head "$BRANCH" --title "词库呈批：第 ${ISSUE_NUMBER} 号呈文" --body-file /tmp/pr_body.txt
+            PR_NUMBER=$(gh pr list --head "$BRANCH" --json number --jq '.[0].number')
+          fi
+          # 批复公文：准予 + 附拉取请求链接
+          printf '\n已转呈拉取请求 [#%s](https://github.com/hongyue0721/huayuquan/pull/%s)，候站长御批。\n' "$PR_NUMBER" "$PR_NUMBER" >> 批复.md
+          gh issue comment "$ISSUE_NUMBER" --body-file 批复.md
