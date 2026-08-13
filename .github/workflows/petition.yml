@@ -72,10 +72,14 @@ jobs:
           # 该分支已有拉取请求则跳过创建（呈文编辑重批时复用原拉取请求）
           PR_NUMBER=$(gh pr list --head "$BRANCH" --json number --jq '.[0].number // empty' 2>/dev/null || true)
           if [ -z "$PR_NUMBER" ]; then
-            printf '## 词库呈批拉取请求\n\n本拉取请求依据[第 %s 号呈文](https://github.com/hongyue0721/huayuquan/issues/%s)自动呈报，收录所呈词条至 `terms/contrib.json` 并重建 `词库.js`。候站长御批。\n' "$ISSUE_NUMBER" "$ISSUE_NUMBER" > /tmp/pr_body.txt
+            printf '## 词库呈批拉取请求\n\n本拉取请求依据[第 %s 号呈文](https://github.com/hongyue0721/huayuquan/issues/%s)自动呈报，收录所呈词条至 `terms/contrib.json` 并重建 `词库.js`。由机器人代为御批。\n' "$ISSUE_NUMBER" "$ISSUE_NUMBER" > /tmp/pr_body.txt
             gh pr create --base master --head "$BRANCH" --title "词库呈批：第 ${ISSUE_NUMBER} 号呈文" --body-file /tmp/pr_body.txt
             PR_NUMBER=$(gh pr list --head "$BRANCH" --json number --jq '.[0].number')
           fi
-          # 批复公文：准予 + 附拉取请求链接
-          printf '\n已转呈拉取请求 [#%s](https://github.com/hongyue0721/huayuquan/pull/%s)，候站长御批。\n' "$PR_NUMBER" "$PR_NUMBER" >> 批复.md
+          # 机器人代为御批：开呈即合并并清理分支；合并失败则留待站长亲批
+          if gh pr merge "$PR_NUMBER" --squash --delete-branch; then
+            printf '\n已转呈拉取请求 [#%s](https://github.com/hongyue0721/huayuquan/pull/%s)，由本机器人代为御批，词条即日入库生效。\n' "$PR_NUMBER" "$PR_NUMBER" >> 批复.md
+          else
+            printf '\n已转呈拉取请求 [#%s](https://github.com/hongyue0721/huayuquan/pull/%s)，候站长御批。\n' "$PR_NUMBER" "$PR_NUMBER" >> 批复.md
+          fi
           gh issue comment "$ISSUE_NUMBER" --body-file 批复.md
