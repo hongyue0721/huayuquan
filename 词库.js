@@ -166,7 +166,7 @@ window.词库 = {
   "context window": "上下文窗口",
   "control": "控制",
   "cookie": "小甜饼",
-  "copilot": "大战代码",
+  "copilot": "副驾驶",
   "copyright": "版权",
   "cost": "成本",
   "costs": "成本",
