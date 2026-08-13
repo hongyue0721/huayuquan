@@ -70,18 +70,23 @@ jobs:
           python3 构建网页词典.py
           git add terms/contrib.json 词库.js
           if git diff --cached --quiet; then
-            # 所呈词条于贡献词库查无在册（如纯删除不存在的词条），工作区无更动：
-            # 不建分支更动、不开拉取请求、不合并，回照复公文即了结
-            printf '## 关于词库呈批的照复\n\n所呈删除之词条，贡献词库查无在册，未予更动，特此照复。\n' > 批复.md
-            gh issue comment "$ISSUE_NUMBER" --body-file 批复.md
-            exit 0
+            if git diff --quiet origin/master HEAD -- terms/contrib.json 词库.js; then
+              # 真空更动：所呈词条于贡献词库查无在册（如纯删除不存在的词条），
+              # 不建更动、不开拉取请求、不合并，回照复公文即了结
+              printf '## 关于词库呈批的照复\n\n所呈删除之词条，贡献词库查无在册，未予更动，特此照复。\n' > 批复.md
+              gh issue comment "$ISSUE_NUMBER" --body-file 批复.md
+              exit 0
+            fi
+            # 重跑/重批：既有分支已含所呈更动（如前番流程中途崩殂），径直补走拉取请求流程
+          else
+            git commit -m "词库呈批：第 ${ISSUE_NUMBER} 号呈文所呈词条 [skip ci]"
+            git push "$PUSH_OPT" origin "$BRANCH"
           fi
-          git commit -m "词库呈批：第 ${ISSUE_NUMBER} 号呈文所呈词条 [skip ci]"
-          git push "$PUSH_OPT" origin "$BRANCH"
           # 该分支已有拉取请求则跳过创建（呈文编辑重批时复用原拉取请求）
           PR_NUMBER=$(gh pr list --head "$BRANCH" --json number --jq '.[0].number // empty' 2>/dev/null || true)
           if [ -z "$PR_NUMBER" ]; then
-            COUNT=$(jq '(.添加 | length) + (.删除 | length)' 呈批方案.json)
+            # 条数以蟒蛇语言统计（jq 不识中文键名，曾致流程中途崩殂）
+            COUNT=$(python3 -c 'import json; d=json.load(open("呈批方案.json", encoding="utf-8")); print(len(d["添加"])+len(d["删除"]))')
             gh pr create --base master --head "$BRANCH" --title "词库呈批：第 ${ISSUE_NUMBER} 号呈文（增删 ${COUNT} 条）" --body-file 拉取请求正文.md
             PR_NUMBER=$(gh pr list --head "$BRANCH" --json number --jq '.[0].number')
           fi
