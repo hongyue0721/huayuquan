@@ -379,6 +379,7 @@ window.词库 = {
   "guide": "指南",
   "hacker": "黑客",
   "had": "拥有",
+  "haiku": "俳句",
   "hallucination": "幻觉",
   "hand": "手",
   "hard": "坚硬",
